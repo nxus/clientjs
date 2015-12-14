@@ -1,5 +1,5 @@
 # @nxus/clientjs
-A Browserify wrapper for Nxus applications using [waterline](https://github.com/balderdashy/waterline).
+A Browserify wrapper for Nxus applications to bundle client-side JS.
 
 # Configuration
 
