@@ -16,7 +16,6 @@ class ClientJS {
     this.config = Object.assign(_defaultConfig, app.config.clientjs);
 
     for (var entry in this.config.entries) {
-      console.log("hi", entry, this.config.entries[entry]);
       this.makeBundle(entry, this.config.entries[entry]);
     }
   }
@@ -30,7 +29,6 @@ class ClientJS {
     if (this.config.watchify) {
       options.plugin = [watchify];
     }
-    console.log("bundling", entry, output);
     browserify(options)
       .transform(babelify)
       .bundle()
