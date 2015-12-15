@@ -30,7 +30,8 @@
     "watchify": "^3.6.1"
   },
   "peerDependencies": {
-    "@nxus/core": "^2.0.0"
+    "@nxus/core": "^2.1.0",
+    "@nxus/router": "^2.1.0"
   },
   "devDependencies": {
     "@nxus/core": "^2.0.0",

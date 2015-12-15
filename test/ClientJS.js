@@ -51,5 +51,13 @@ describe("ClientJS", () => {
         done();
       });
     });
+    it("should provide asset routes", (done)=> {
+      app.get.calledWith('router').should.be.true;
+      var args = app._get.provide.lastCall.args;
+      args[0].should.equal('asset');
+      args[1].should.equal('/clientjs/test/apps');
+      args[2].should.include('test/apps');
+      done();
+    });
   });
 });
