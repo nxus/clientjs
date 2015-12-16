@@ -25,10 +25,6 @@ describe("ClientJS", () => {
   });
   describe("Init", () => {
     beforeEach(() => {
-      try {
-        fs.unlinkSync(path.resolve('test/apps/one-bundled.js'))
-        fs.unlinkSync(path.resolve('test/apps/one-bundled.js'))
-      } catch (e) {}
       app.config.clientjs = {
         entries: {
           'test/apps/one.js': 'test/apps/one-bundled.js',
@@ -38,26 +34,39 @@ describe("ClientJS", () => {
       
       clientjs = new ClientJS(app);
     });
-
-    it("should create bundle one", (done)=> {
-      fs.access(path.resolve('test/apps/one-bundled.js'), (err) => {
-        (err == null).should.be.true;
-        done();
-      });
-    });
-    it("should create bundle two", (done)=> {
-      fs.access(path.resolve('test/apps/two-bundled.js'), (err) => {
-        (err == null).should.be.true;
-        done();
-      });
-    });
     it("should provide asset routes", (done)=> {
       app.get.calledWith('router').should.be.true;
-      var args = app._get.provide.lastCall.args;
+      var args = app._get.provide.firstCall.args;
       args[0].should.equal('asset');
       args[1].should.equal('/clientjs/test/apps');
       args[2].should.include('test/apps');
       done();
+    });
+    it("should gather bundle", () => {
+      app.get.calledWith('clientjs').should.be.true;
+      app._get.gather.calledWith('bundle').should.be.true;
+    });
+    it("should provide local bundles", () => {
+      app._get.provide.calledWith('bundle', 'test/apps/one.js', 'test/apps/one-bundled.js').should.be.true;
+      app._get.provide.calledWith('bundle', 'test/apps/two.js', 'test/apps/two-bundled.js').should.be.true;
+    });
+  });
+  describe("Bundle", () => {
+    beforeEach(() => {
+      try {
+        fs.unlinkSync(path.resolve('test/apps/one-bundled.js'))
+        fs.unlinkSync(path.resolve('test/apps/one-bundled.js'))
+      } catch (e) {}
+      
+      clientjs = new ClientJS(app);
+    });
+    
+    it("should create bundle one", (done) => {
+      clientjs.bundle('tests/apps/one.js', 'test/apps/one-bundled.js');
+      fs.access(path.resolve('test/apps/one-bundled.js'), (err) => {
+        (err == null).should.be.true;
+        done();
+      });
     });
   });
 });
