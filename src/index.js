@@ -20,6 +20,7 @@
 
 import browserify from 'browserify'
 import babelify from 'babelify'
+import reactify from 'reactify'
 import watchify from 'watchify'
 import path from 'path'
 import fs from 'fs'
@@ -65,6 +66,7 @@ class ClientJS {
       options.plugin = [watchify];
     }
     browserify(options)
+      .transform(reactify)
       .transform(babelify)
       .bundle()
       .pipe(fs.createWriteStream(output));
