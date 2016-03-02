@@ -1,3 +1,21 @@
+/**
+ * [![Build Status](https://travis-ci.org/nxus/clientjs.svg?branch=master)](https://travis-ci.org/nxus/clientjs)
+ * 
+ * Integration of browserify with Nxus
+ * 
+ * # Configuration
+ * 
+ *     "config": {
+ *       "clientjs": {
+ *         "watchify": true,
+ *         "assetPrefix": "/url/prefix/for/generated"
+ *         "entries": {
+ *           "path/source/file.js": "path/output/bundle.js"
+ *         }
+ *       }
+ *     }
+ *
+ */
 'use strict';
 
 import browserify from 'browserify'
@@ -14,9 +32,11 @@ var _defaultConfig = {
 
 class ClientJS {
   constructor (app) {
-    this.config = Object.assign(_defaultConfig, app.config.clientjs);
+    this.app = app
+    this.config = Object.assign(_defaultConfig, app.config.clientjs)
 
-    app.get('clientjs').gather('bundle', this.bundle.bind(this));
+    this.app.get('clientjs').use(this)
+      .gather('bundle')
     this.fromConfigBundles(app);
   }
 
@@ -29,10 +49,10 @@ class ClientJS {
 
       if (!(output_dir in output_dirs)) {
         output_dirs[output_dir] = true;
-        app.get('router').provide('asset', path.join(this.config.assetPrefix, output_dir), path.resolve(output_dir));
+        this.app.get('router').setStatic(path.join(this.config.assetPrefix, output_dir), path.resolve(output_dir));
       }
 
-      app.get('clientjs').provide('bundle', entry, output);
+      this.app.get('clientjs').bundle(entry, output);
     }
   }
   

@@ -36,19 +36,19 @@ describe("ClientJS", () => {
     });
     it("should provide asset routes", (done)=> {
       app.get.calledWith('router').should.be.true;
-      var args = app._get.provide.firstCall.args;
-      args[0].should.equal('asset');
+      var args = app.get().provide.firstCall.args;
+      args[0].should.equal('setStatic');
       args[1].should.equal('/clientjs/test/apps');
       args[2].should.include('test/apps');
       done();
     });
     it("should gather bundle", () => {
       app.get.calledWith('clientjs').should.be.true;
-      app._get.gather.calledWith('bundle').should.be.true;
+      app.get().gather.calledWith('bundle').should.be.true;
     });
     it("should provide local bundles", () => {
-      app._get.provide.calledWith('bundle', 'test/apps/one.js', 'test/apps/one-bundled.js').should.be.true;
-      app._get.provide.calledWith('bundle', 'test/apps/two.js', 'test/apps/two-bundled.js').should.be.true;
+      app.get().provide.calledWith('bundle', 'test/apps/one.js', 'test/apps/one-bundled.js').should.be.true;
+      app.get().provide.calledWith('bundle', 'test/apps/two.js', 'test/apps/two-bundled.js').should.be.true;
     });
   });
   describe("Bundle", () => {
