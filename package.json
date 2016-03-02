@@ -2,7 +2,7 @@
   "name": "@nxus/clientjs",
   "version": "2.4.0-0",
   "description": "Client JS compilation for Nxus applications",
-  "main": "lib/ClientJS.js",
+  "main": "lib/",
   "scripts": {
     "test": "NODE_ENV=test mocha --compilers js:babel/register -R spec",
     "compile": "babel --optional runtime -d lib/ src/",

@@ -3,7 +3,7 @@
 import fs from 'fs'
 import path from 'path'
 
-import ClientJS from '../src/ClientJS'
+import ClientJS from '../src/'
 
 import TestApp from '@nxus/core/lib/test/support/TestApp';
 
@@ -34,14 +34,6 @@ describe("ClientJS", () => {
       
       clientjs = new ClientJS(app);
     });
-    it("should provide asset routes", (done)=> {
-      app.get.calledWith('router').should.be.true;
-      var args = app.get().provide.firstCall.args;
-      args[0].should.equal('setStatic');
-      args[1].should.equal('/clientjs/test/apps');
-      args[2].should.include('test/apps');
-      done();
-    });
     it("should gather bundle", () => {
       app.get.calledWith('clientjs').should.be.true;
       app.get().gather.calledWith('bundle').should.be.true;
@@ -59,14 +51,19 @@ describe("ClientJS", () => {
       } catch (e) {}
       
       clientjs = new ClientJS(app);
+      clientjs.bundle('tests/apps/one.js', 'test/apps/one-bundled.js');
     });
     
     it("should create bundle one", (done) => {
-      clientjs.bundle('tests/apps/one.js', 'test/apps/one-bundled.js');
       fs.access(path.resolve('test/apps/one-bundled.js'), (err) => {
         (err == null).should.be.true;
         done();
       });
+    });
+    it("should provide asset routes", (done)=> {
+      app.get.calledWith('router').should.be.true;
+      app.get().provide.calledWith('setStatic', '/clientjs/test/apps').should.be.true
+      done();
     });
   });
 });

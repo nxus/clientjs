@@ -26,7 +26,7 @@ import fs from 'fs'
 
 var _defaultConfig = {
   watchify: true,
-  assetPrefix: '/clientjs',
+  assetPrefix: '/clientjs/',
   entries: {}
 }
 
@@ -34,29 +34,28 @@ class ClientJS {
   constructor (app) {
     this.app = app
     this.config = Object.assign(_defaultConfig, app.config.clientjs)
-
+    this.output_dirs = {}
     this.app.get('clientjs').use(this)
       .gather('bundle')
+
     this.fromConfigBundles(app);
   }
 
   fromConfigBundles (app) {
-    
-    var output_dirs = {};
     for (var entry in this.config.entries) {
       var output = this.config.entries[entry];
-      var output_dir = path.dirname(output);
-
-      if (!(output_dir in output_dirs)) {
-        output_dirs[output_dir] = true;
-        this.app.get('router').setStatic(path.join(this.config.assetPrefix, output_dir), path.resolve(output_dir));
-      }
 
       this.app.get('clientjs').bundle(entry, output);
     }
   }
   
   bundle (entry, output) {
+    this.app.log.debug('Bundling', entry, output)
+    var output_dir = path.dirname(output);
+    if (!(output_dir in this.output_dirs)) {
+      this.output_dirs[output_dir] = true;
+      this.app.get('router').setStatic(this.config.assetPrefix+output_dir, path.resolve(output_dir));
+    }
     var options = {
       entries: [entry],
       cache: {},
