@@ -20,7 +20,6 @@
 
 import browserify from 'browserify'
 import babelify from 'babelify'
-import reactify from 'reactify'
 import watchify from 'watchify'
 import path from 'path'
 import fs from 'fs'
@@ -28,6 +27,7 @@ import fs from 'fs'
 var _defaultConfig = {
   watchify: true,
   assetPrefix: '/clientjs/',
+  babelPresets: ["es2015", "react"],
   entries: {}
 }
 
@@ -65,11 +65,23 @@ class ClientJS {
     if (this.config.watchify) {
       options.plugin = [watchify];
     }
-    browserify(options)
-      .transform(reactify)
-      .transform(babelify)
-      .bundle()
-      .pipe(fs.createWriteStream(output));
+    let b = browserify(options)
+      .transform(babelify.configure({ presets: this.config.babelPresets }))
+      .on("log", (msg) => {
+        console.log("Bundle for", output, msg)
+      })
+    let bundle = () => {
+      b.bundle()
+        .on("error", (err) => {
+          console.log("Bundle error for", output, err)
+        })
+        .on("end", () => {
+          console.log("Finished bundle", output)
+        })
+        .pipe(fs.createWriteStream(output));
+    }
+    b.on("update", bundle)
+    bundle()
   }
 }
 
