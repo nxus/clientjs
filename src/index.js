@@ -14,6 +14,17 @@
  *         }
  *       }
  *     }
+ * 
+ * # Use with React (or other babel transforms)
+ *
+ * You will need to install the necessary babel presets in your application, and add the config option `babelPresets`, like:
+ *
+ *     npm install --save babel-preset-es2015 babel-preset-react
+ *
+ *     "config": {
+ *       "clientjs": {
+ *         "babelPresets": ["es2015", "react"]
+ *       }
  *
  */
 'use strict';
@@ -27,7 +38,7 @@ import fs from 'fs'
 var _defaultConfig = {
   watchify: true,
   assetPrefix: '/clientjs/',
-  babelPresets: ["es2015", "react"],
+  babelPresets: ["es2015"],
   entries: {}
 }
 
