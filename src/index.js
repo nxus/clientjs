@@ -75,9 +75,6 @@ class ClientJS {
         .on("error", (err) => {
           console.log("Bundle error for", output, err)
         })
-        .on("end", () => {
-          console.log("Finished bundle", output)
-        })
         .pipe(fs.createWriteStream(output));
     }
     b.on("update", bundle)
