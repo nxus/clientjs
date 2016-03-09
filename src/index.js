@@ -23,7 +23,9 @@
  *
  *     "config": {
  *       "clientjs": {
- *         "babelPresets": ["es2015", "react"]
+ *         "babel": {
+ *           "presets": ["es2015", "react"]
+ *         }
  *       }
  *
  */
@@ -38,7 +40,7 @@ import fs from 'fs'
 var _defaultConfig = {
   watchify: true,
   assetPrefix: '/clientjs/',
-  babelPresets: ["es2015"],
+  babel: {},
   entries: {}
 }
 
@@ -77,7 +79,7 @@ class ClientJS {
       options.plugin = [watchify];
     }
     let b = browserify(options)
-      .transform(babelify.configure({ presets: this.config.babelPresets }))
+      .transform(babelify.configure(this.config.babel))
       .on("log", (msg) => {
         console.log("Bundle for", output, msg)
       })
