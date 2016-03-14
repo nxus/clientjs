@@ -81,12 +81,12 @@ class ClientJS {
     let b = browserify(options)
       .transform(babelify.configure(this.config.babel))
       .on("log", (msg) => {
-        console.log("Bundle for", output, msg)
+        this.app.log.debug("Bundle for", output, msg)
       })
     let bundle = () => {
       b.bundle()
         .on("error", (err) => {
-          console.log("Bundle error for", output, err)
+          this.app.log.debug("Bundle error for", output, err)
         })
         .pipe(fs.createWriteStream(output));
     }
