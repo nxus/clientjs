@@ -1,6 +1,6 @@
 {
   "name": "@nxus/clientjs",
-  "version": "2.4.0-1",
+  "version": "2.4.0-2",
   "description": "Client JS compilation for Nxus applications",
   "main": "lib/",
   "scripts": {
