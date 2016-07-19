@@ -30,3 +30,18 @@ You will need to install the necessary babel presets in your application, and ad
           "presets": ["es2015", "react"]
         }
       }
+
+## API
+
+* * *
+
+## bundle
+
+Create a clientjs bundle that can be injected into a rendered page.
+
+**Parameters**
+
+-   `entry` **\[type]** [description]
+-   `output` **\[type]** [description]
+
+Returns **\[type]** [description]

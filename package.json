@@ -1,12 +1,15 @@
 {
-  "name": "@nxus/clientjs",
-  "version": "2.4.0-2",
+  "name": "nxus-clientjs",
+  "version": "3.0.0-0",
   "description": "Client JS compilation for Nxus applications",
   "main": "lib/",
   "scripts": {
-    "test": "NODE_ENV=test mocha --compilers js:babel-register -R spec",
-    "compile": "babel -d lib/ src/",
-    "prepublish": "npm run compile"
+    "test": "NODE_ENV=test mocha --compilers js:babel-core/register -R spec",
+    "compile": "babel src --out-dir lib ",
+    "prepublish": "npm run compile",
+    "postpublish": "npm run docs-readme && npm run commit-update-docs",
+    "docs-readme": "export NAME=`npm view . name`; export VERSION=`npm view . version`; documentation readme ./src/*.js --name $NAME --project-version $VERSION --readme-file ./README.md -s $NAME",
+    "commit-update-docs": "git add ./README.md && git commit -m 'Updated README API Docs' && git push"
   },
   "repository": {
     "type": "git",
@@ -31,16 +34,19 @@
     "watchify": "^3.6.1"
   },
   "peerDependencies": {
-    "@nxus/core": "^2.4.0-0",
-    "@nxus/router": "^2.4.0-0"
+    "nxus-core": "^3.0.0-0",
+    "nxus-router": "^3.0.0-0"
   },
   "devDependencies": {
-    "@nxus/core": "^2.4.0-0",
-    "babel-register": "^6.6.5",
-    "chai": "^3.4.1",
-    "chai-as-promised": "^5.1.0",
+    "babel-core": "^6.9.0",
     "mocha": "^2.2.5",
-    "sinon": "^1.17.2"
+    "should": "^7.0.2",
+    "sinon": "^1.17.2",
+    "chai": "^3.5.0",
+    "documentation": "^4.0.0-beta",
+    "chai-as-promised": "^5.2.0",
+    "babel-preset-es2015": "^6.9.0",
+    "babel-cli": "^6.9.0"
   },
   "babel": {
     "presets": [

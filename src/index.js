@@ -28,6 +28,8 @@
  *         }
  *       }
  *
+ * # API
+ * --------
  */
 'use strict';
 
@@ -63,6 +65,12 @@ class ClientJS {
     }
   }
   
+  /**
+   * Create a clientjs bundle that can be injected into a rendered page.
+   * @param  {[type]} entry  [description]
+   * @param  {[type]} output [description]
+   * @return {[type]}        [description]
+   */
   bundle (entry, output) {
     this.app.log.debug('Bundling', entry, output)
     var output_dir = path.dirname(output);
