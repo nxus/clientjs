@@ -8,6 +8,7 @@
     "compile": "babel src --out-dir lib ",
     "prepublish": "npm run compile",
     "postpublish": "npm run docs-readme && npm run commit-update-docs",
+    "docs": "npm run docs-readme && npm run commit-update-docs",
     "docs-readme": "export NAME=`npm view . name`; export VERSION=`npm view . version`; documentation readme ./src/*.js --name $NAME --project-version $VERSION --readme-file ./README.md -s $NAME",
     "commit-update-docs": "git add ./README.md && git commit -m 'Updated README API Docs' && git push"
   },

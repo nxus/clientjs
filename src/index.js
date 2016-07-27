@@ -6,7 +6,7 @@
  *
  * ## Installation
  *
- *    npm install nxus-clientjs --save
+ *     npm install nxus-clientjs --save
  * 
  * ## Configuration Options
  * 
@@ -27,24 +27,24 @@
  *
  * ### Creating the bundle
  *
- *    app.get('clientjs').bundle('/my/local/file.js', '/browser/path/to/file.js')
+ *     app.get('clientjs').bundle('/my/local/file.js', '/browser/path/to/file.js')
  *
  * ### Include/inject the source file
  *
  * You can either include the output path as specified when you creatd the bundle
  *
- *    <script source="/browser/path/to/file.js"></script>
+ *     <script source="/browser/path/to/file.js"></script>
  *
  * Or using Nxus Templater, you can inject the script by passing the output path to the `script` key on render or using the Templater 
  * lifecycle events.
  *
- *    app.get('templater').render('my-template', {scripts: ['/browser/path/to/file.js']})
+ *     app.get('templater').render('my-template', {scripts: ['/browser/path/to/file.js']})
  *
  * Or
  *
- *    app.get('templater').on('renderContext.my-template', () => {
- *      return {scripts: ['/browser/path/to/file.js']}
- *    })
+ *     app.get('templater').on('renderContext.my-template', () => {
+ *          return {scripts: ['/browser/path/to/file.js']}
+ *     })
  * 
  * ### Using ClientJS with React (or other babel transforms)
  *
