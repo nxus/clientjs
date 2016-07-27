@@ -11,7 +11,7 @@ Integration of browserify with Nxus
     "config": {
       "clientjs": {
         "watchify": true,
-        "assetPrefix": "/url/prefix/for/generated"
+        "routePrefix": "/url/prefix/for/generated"
         "entries": {
           "path/source/file.js": "path/output/bundle.js"
         }
