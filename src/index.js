@@ -8,7 +8,7 @@
  *     "config": {
  *       "clientjs": {
  *         "watchify": true,
- *         "assetPrefix": "/url/prefix/for/generated"
+ *         "routePrefix": "/url/prefix/for/generated"
  *         "entries": {
  *           "path/source/file.js": "path/output/bundle.js"
  *         }
@@ -37,11 +37,12 @@ import browserify from 'browserify'
 import babelify from 'babelify'
 import watchify from 'watchify'
 import path from 'path'
-import fs from 'fs'
+import fs from 'fs-extra'
 
 var _defaultConfig = {
   watchify: true,
-  assetPrefix: '/clientjs/',
+  routePrefix: '',
+  assetFolder: '.tmp',
   babel: {},
   entries: {}
 }
@@ -50,7 +51,7 @@ class ClientJS {
   constructor (app) {
     this.app = app
     this.config = Object.assign(_defaultConfig, app.config.clientjs)
-    this.output_dirs = {}
+    this.output_paths = {}
     this.app.get('clientjs').use(this)
       .gather('bundle')
 
@@ -73,11 +74,20 @@ class ClientJS {
    */
   bundle (entry, output) {
     this.app.log.debug('Bundling', entry, output)
-    var output_dir = path.dirname(output);
-    if (!(output_dir in this.output_dirs)) {
-      this.output_dirs[output_dir] = true;
-      this.app.get('router').setStatic(this.config.assetPrefix+output_dir, path.resolve(output_dir));
+
+    if(output && output[0] != '/') output = "/"+output //add prepending slash if not set
+    
+    var output_route = this.config.routePrefix+path.dirname(output); //combine the routePrefix with output path
+    var output_path = path.resolve(this.config.assetFolder+path.dirname(output));
+    var output_file = this.config.assetFolder+output;
+    
+    fs.mkdirsSync(output_path) //create the local folder for output if it doesn't exist
+    
+    if (!(output_path in this.output_paths)) {
+      this.output_paths[output_path] = true;
+      this.app.get('router').setStatic(output_route, output_path);
     }
+    
     var options = {
       entries: [entry],
       cache: {},
@@ -89,14 +99,14 @@ class ClientJS {
     let b = browserify(options)
       .transform(babelify.configure(this.config.babel))
       .on("log", (msg) => {
-        this.app.log.debug("Bundle for", output, msg)
+        this.app.log.debug("Bundle for", output_file, msg)
       })
     let bundle = () => {
       b.bundle()
         .on("error", (err) => {
-          this.app.log.debug("Bundle error for", output, err)
+          this.app.log.debug("Bundle error for", output_file, err)
         })
-        .pipe(fs.createWriteStream(output));
+        .pipe(fs.createWriteStream(output_file));
     }
     b.on("update", bundle)
     bundle()
