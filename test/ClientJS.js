@@ -55,14 +55,14 @@ describe("ClientJS", () => {
     });
     
     it("should create bundle one", (done) => {
-      fs.access(path.resolve('test/apps/one-bundled.js'), (err) => {
+      fs.access(path.resolve('.tmp/test/apps/one-bundled.js'), (err) => {
         (err == null).should.be.true;
         done();
       });
     });
     it("should provide asset routes", (done)=> {
       app.get.calledWith('router').should.be.true;
-      app.get().provide.calledWith('setStatic', '/clientjs/test/apps').should.be.true
+      app.get().provide.calledWith('setStatic', '/test/apps').should.be.true
       done();
     });
   });
