@@ -50,11 +50,17 @@ describe('ClientJS', () => {
       
       clientjs = new ClientJS();
     });
+    
     it('should have the config', () => {
       should.exist(clientjs.config.entries)
       should.exist(clientjs.config.entries['test/apps/one.js'])
       clientjs.config.entries['test/apps/one.js'].should.eql('test/apps/one-bundled.js')
     });
+
+    it('should use the default babelrc config', () => {
+      should.exist(clientjs.config.babel)
+      should.exist(clientjs.config.babel['presets'])
+    })
   });
   describe('Bundle', () => {
 
