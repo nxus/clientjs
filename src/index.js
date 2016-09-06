@@ -69,31 +69,42 @@ import babelify from 'babelify'
 import watchify from 'watchify'
 import path from 'path'
 import fs from 'fs-extra'
+import rc from 'rc'
+import _ from 'underscore'
 
-var _defaultConfig = {
-  watchify: true,
-  routePrefix: '',
-  assetFolder: '.tmp',
-  babel: {},
-  entries: {}
-}
+import {router} from 'nxus-router'
 
-class ClientJS {
-  constructor (app) {
-    this.app = app
-    this.config = Object.assign(_defaultConfig, app.config.clientjs)
-    this.output_paths = {}
-    this.app.get('clientjs').use(this)
-      .gather('bundle')
+import {application as app, NxusModule} from 'nxus-core'
 
-    this.fromConfigBundles(app);
+class ClientJS extends NxusModule {
+  constructor () {
+    super()
+    this._output_paths = {}
+
+    this._defaultOpts = {     
+      watchify: true,
+      routePrefix: '/assets/clientjs',
+      assetFolder: '.tmp',
+      babel: {},
+      entries: {}
+    }
+
+    this.config = Object.assign(this._defaultOpts, this.config)
+
+    if(_.isEmpty(this.config.babel)) this.config.babel = require('rc')('babel', {})
+    this._fromConfigBundles(app);
   }
 
-  fromConfigBundles (app) {
+  _defaultConfig() {
+    return {}
+  } 
+
+  _fromConfigBundles (app) {
     for (var entry in this.config.entries) {
       var output = this.config.entries[entry];
-
-      this.app.get('clientjs').bundle(entry, output);
+      app.once('launch', () => {
+        this.bundle(entry, output);
+      })
     }
   }
   
@@ -103,19 +114,18 @@ class ClientJS {
    * @param  {[type]} output the output path to use in the browser to access the bundled source
    */
   bundle (entry, output) {
-    this.app.log.debug('Bundling', entry, output)
+    this.log.debug('Bundling', entry, output)
 
     if(output && output[0] != '/') output = "/"+output //add prepending slash if not set
-    
     var output_route = this.config.routePrefix+path.dirname(output); //combine the routePrefix with output path
     var output_path = path.resolve(this.config.assetFolder+path.dirname(output));
     var output_file = this.config.assetFolder+output;
     
     fs.mkdirsSync(output_path) //create the local folder for output if it doesn't exist
     
-    if (!(output_path in this.output_paths)) {
-      this.output_paths[output_path] = true;
-      this.app.get('router').setStatic(output_route, output_path);
+    if (!(output_path in this._output_paths)) {
+      this._output_paths[output_path] = true;
+      app.get('router').staticRoute(output_route, output_path);
     }
     
     var options = {
@@ -143,4 +153,8 @@ class ClientJS {
   }
 }
 
-export default ClientJS;
+
+var clientjs = ClientJS.getProxy()
+
+export {ClientJS as default, clientjs}
+
