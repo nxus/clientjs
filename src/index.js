@@ -71,8 +71,10 @@ import path from 'path'
 import fs from 'fs-extra'
 import rc from 'rc'
 import _ from 'underscore'
+import morph from 'morph'
 
 import {router} from 'nxus-router'
+import {templater} from 'nxus-templater'
 
 import {application as app, NxusModule} from 'nxus-core'
 
@@ -107,6 +109,21 @@ class ClientJS extends NxusModule {
       })
     }
   }
+
+  /**
+   * Injects the passed script into to the specified template
+   * @param  {String} templateName the name of the template to include the script into
+   * @param  {[type]} script       the path of the script file to include
+   */
+  includeScript(templateName, script) {
+    let outputPath = morph.toDashed(templateName)+"/script.js"
+
+    templater.on('renderContext.'+templateName, () => {
+      return {scripts: [outputPath]}
+    })
+
+    return this.bundle(script, outputPath)
+  }
   
   /**
    * Create a clientjs bundle that can be injected into a rendered page.
@@ -140,7 +157,7 @@ class ClientJS extends NxusModule {
     }
     let b = browserify(options)
       .transform(babelify.configure(this.config.babel))
-      .plugin('minifyify', {map: output_map, output: output_map})
+      //.plugin('minifyify', {map: output_map, output: output_map})
       .on("log", (msg) => {
         this.log.debug("Bundle for", output_file, msg)
       })

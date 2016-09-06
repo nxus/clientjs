@@ -10,6 +10,7 @@ import sinon from 'sinon'
 
 import {application as app} from 'nxus-core'
 import {router} from 'nxus-router'
+import {templater} from 'nxus-templater'
 
 import {should as Should} from 'chai'
 
@@ -63,7 +64,6 @@ describe('ClientJS', () => {
     })
   });
   describe('Bundle', () => {
-
     before(() => {
       sinon.spy(router, 'provide')
     })
@@ -73,8 +73,8 @@ describe('ClientJS', () => {
         fs.unlinkSync(path.resolve('test/apps/one-bundled.js'))
       } catch (e) {}
       
-      clientjs = new ClientJS(app);
-      clientjs.bundle('tests/apps/one.js', 'test/apps/one-bundled.js');
+      clientjs = new ClientJS();
+      clientjs.bundle('test/apps/one.js', 'test/apps/one-bundled.js');
     });
     
     it('should create bundle one', (done) => {
@@ -89,4 +89,21 @@ describe('ClientJS', () => {
       done();
     });
   });
+
+  describe('Include Script', () => {
+    before(() => {
+      sinon.spy(templater, 'on')
+    })
+    
+    beforeEach(() => {
+      clientjs = new ClientJS();
+      clientjs.includeScript('my-template', 'tests/apps/one.js');
+    });
+
+    it('Call templater and render', (done)=> {
+      templater.on.calledWith('renderContext.my-template').should.be.true
+      router.provide.calledWith('staticRoute', '/assets/clientjs/my-template').should.be.true
+      done();
+    });
+  })
 });
