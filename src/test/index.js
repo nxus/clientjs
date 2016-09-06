@@ -71,7 +71,6 @@ describe('ClientJS', () => {
     beforeEach(() => {
       try {
         fs.unlinkSync(path.resolve('test/apps/one-bundled.js'))
-        fs.unlinkSync(path.resolve('test/apps/one-bundled.js'))
       } catch (e) {}
       
       clientjs = new ClientJS(app);

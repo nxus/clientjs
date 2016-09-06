@@ -120,6 +120,7 @@ class ClientJS extends NxusModule {
     var output_route = this.config.routePrefix+path.dirname(output); //combine the routePrefix with output path
     var output_path = path.resolve(this.config.assetFolder+path.dirname(output));
     var output_file = this.config.assetFolder+output;
+    var output_map = this.config.assetFolder+output+".map";
     
     fs.mkdirsSync(output_path) //create the local folder for output if it doesn't exist
     
@@ -132,19 +133,24 @@ class ClientJS extends NxusModule {
       entries: [entry],
       cache: {},
       packageCache: {},
+      debug: true
     };
     if (this.config.watchify) {
       options.plugin = [watchify];
     }
     let b = browserify(options)
       .transform(babelify.configure(this.config.babel))
+      .plugin('minifyify', {map: output_map, output: output_map})
       .on("log", (msg) => {
-        this.app.log.debug("Bundle for", output_file, msg)
+        this.log.debug("Bundle for", output_file, msg)
       })
     let bundle = () => {
       b.bundle()
         .on("error", (err) => {
-          this.app.log.debug("Bundle error for", output_file, err)
+          this.log.debug("Bundle error for", output_file, err)
+        })
+        .on("log", (msg) => {
+          this.log.debug("Bundle for", output_file, msg)
         })
         .pipe(fs.createWriteStream(output_file));
     }
