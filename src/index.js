@@ -10,13 +10,13 @@
  * 
  * ## Configuration Options
  * 
- *     "config": {
- *       "clientjs": {
- *         "watchify": true,
- *         "routePrefix": "/url/prefix/for/generated", //optional additional prefix, defaults to ''
- *         "assetFolder": "/local/output/folder", //optional output folder, defaults to .tmp within your project directory
- *         "entries": { //manually specify static files to be created
- *           "/path/source/file.js": "/path/output/bundle.js"
+ *     'config': {
+ *       'clientjs': {
+ *         'watchify': true,
+ *         'routePrefix': '/url/prefix/for/generated', //optional additional prefix, defaults to ''
+ *         'assetFolder': '/local/output/folder', //optional output folder, defaults to .tmp within your project directory
+ *         'entries': { //manually specify static files to be created
+ *           '/path/source/file.js': '/path/output/bundle.js'
  *         }
  *       }
  *     }
@@ -33,7 +33,7 @@
  *
  * You can either include the output path as specified when you creatd the bundle
  *
- *     <script source="/browser/path/to/file.js"></script>
+ *     <script source='/browser/path/to/file.js'></script>
  *
  * Or using Nxus Templater, you can inject the script by passing the output path to the `script` key on render or using the Templater 
  * lifecycle events.
@@ -52,17 +52,17 @@
  *
  *     npm install --save babel-preset-es2015 babel-preset-react
  *
- *     "config": {
- *       "clientjs": {
- *         "babel": {
- *           "presets": ["es2015", "react"]
+ *     'config': {
+ *       'clientjs': {
+ *         'babel': {
+ *           'presets': ['es2015', 'react']
  *         }
  *       }
  *
  * # API
  * --------
  */
-'use strict';
+'use strict'
 
 import browserify from 'browserify'
 import babelify from 'babelify'
@@ -81,31 +81,26 @@ import {application as app, NxusModule} from 'nxus-core'
 class ClientJS extends NxusModule {
   constructor () {
     super()
-    this._output_paths = {}
+    this._outputPaths = {}
 
-    this._defaultOpts = {     
-      watchify: true,
-      routePrefix: '/assets/clientjs',
-      assetFolder: '.tmp',
-      babel: {},
-      entries: {}
-    }
-
-    this.config = Object.assign(this._defaultOpts, this.config)
-
-    if(_.isEmpty(this.config.babel)) this.config.babel = require('rc')('babel', {})
-    this._fromConfigBundles(app);
+    if(_.isEmpty(this.config.babel)) this.config.babel = _.omit(require('rc')('babel', {}), '_', 'config', 'configs')
+    this._fromConfigBundles(app)
   }
 
   _defaultConfig() {
-    return {}
-  } 
+    return {     
+      watchify: true,
+      routePrefix: '/assets/clientjs',
+      assetFolder: '.tmp',
+      entries: {}
+    }
+  }
 
   _fromConfigBundles (app) {
     for (var entry in this.config.entries) {
-      var output = this.config.entries[entry];
+      var output = this.config.entries[entry]
       app.once('launch', () => {
-        this.bundle(entry, output);
+        this.bundle(entry, output)
       })
     }
   }
@@ -116,10 +111,11 @@ class ClientJS extends NxusModule {
    * @param  {[type]} script       the path of the script file to include
    */
   includeScript(templateName, script) {
-    let outputPath = morph.toDashed(templateName)+"/script.js"
+    let outputPath = morph.toDashed(templateName)+'/script.js'
+    let outputUrl = '/assets/clientjs/'+outputPath
 
     templater.on('renderContext.'+templateName, () => {
-      return {scripts: [outputPath]}
+      return {scripts: [outputUrl]}
     })
 
     return this.bundle(script, outputPath)
@@ -133,17 +129,18 @@ class ClientJS extends NxusModule {
   bundle (entry, output) {
     this.log.debug('Bundling', entry, output)
 
-    if(output && output[0] != '/') output = "/"+output //add prepending slash if not set
-    var output_route = this.config.routePrefix+path.dirname(output); //combine the routePrefix with output path
-    var output_path = path.resolve(this.config.assetFolder+path.dirname(output));
-    var output_file = this.config.assetFolder+output;
-    var output_map = this.config.assetFolder+output+".map";
+    if(output && output[0] != '/') output = '/'+output //add prepending slash if not set
+    var outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
+    var outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
+    var outputFile = this.config.assetFolder+output
+    var outputMap = this.config.assetFolder+output+'.map'
+    var outputMapUrl = outputRoute+'/'+path.basename(output)+'.map'
+
+    fs.mkdirsSync(outputPath) //create the local folder for output if it doesn't exist
     
-    fs.mkdirsSync(output_path) //create the local folder for output if it doesn't exist
-    
-    if (!(output_path in this._output_paths)) {
-      this._output_paths[output_path] = true;
-      app.get('router').staticRoute(output_route, output_path);
+    if (!(outputPath in this._outputPaths)) {
+      this._outputPaths[outputPath] = true
+      app.get('router').staticRoute(outputRoute, outputPath)
     }
     
     var options = {
@@ -151,27 +148,27 @@ class ClientJS extends NxusModule {
       cache: {},
       packageCache: {},
       debug: true
-    };
+    }
     if (this.config.watchify) {
-      options.plugin = [watchify];
+      options.plugin = [watchify]
     }
     let b = browserify(options)
       .transform(babelify.configure(this.config.babel))
-      //.plugin('minifyify', {map: output_map, output: output_map})
-      .on("log", (msg) => {
-        this.log.debug("Bundle for", output_file, msg)
+      .plugin('minifyify', {map: outputMapUrl, output: outputMap})
+      .on('log', (msg) => {
+        this.log.debug('Bundle for', entry, msg)
       })
     let bundle = () => {
       b.bundle()
-        .on("error", (err) => {
-          this.log.debug("Bundle error for", output_file, err)
+        .on('error', (err) => {
+          this.log.debug('Bundle error for', entry, err)
         })
-        .on("log", (msg) => {
-          this.log.debug("Bundle for", output_file, msg)
+        .on('log', (msg) => {
+          this.log.debug('Bundle for', entry, msg)
         })
-        .pipe(fs.createWriteStream(output_file));
+        .pipe(fs.createWriteStream(outputFile))
     }
-    b.on("update", bundle)
+    b.on('update', bundle)
     bundle()
   }
 }
