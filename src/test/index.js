@@ -65,7 +65,7 @@ describe('ClientJS', () => {
   });
   describe('Bundle', () => {
     before(() => {
-      sinon.spy(router, 'provide')
+      router.staticRoute = sinon.spy()
     })
     
     beforeEach(() => {
@@ -85,7 +85,7 @@ describe('ClientJS', () => {
     });
 
     it('should provide asset routes', (done)=> {
-      router.provide.calledWith('staticRoute', '/assets/clientjs/test/apps').should.be.true
+      router.staticRoute.calledWith('/assets/clientjs/test/apps').should.be.true
       done();
     });
   });
@@ -93,16 +93,14 @@ describe('ClientJS', () => {
   describe('Include Script', () => {
     before(() => {
       sinon.spy(templater, 'on')
-    })
-    
-    beforeEach(() => {
       clientjs = new ClientJS();
       clientjs.includeScript('my-template', 'tests/apps/one.js');
+      app.emit('launch')
     });
 
     it('Call templater and render', (done)=> {
       templater.on.calledWith('renderContext.my-template').should.be.true
-      router.provide.calledWith('staticRoute', '/assets/clientjs/my-template').should.be.true
+      router.staticRoute.calledWith('/assets/clientjs/my-template').should.be.true
       done();
     });
   })

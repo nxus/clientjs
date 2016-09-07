@@ -117,8 +117,9 @@ class ClientJS extends NxusModule {
     templater.on('renderContext.'+templateName, () => {
       return {scripts: [outputUrl]}
     })
-
-    return this.bundle(script, outputPath)
+    app.once('launch', () => {
+      return this.bundle(script, outputPath)
+    })
   }
   
   /**
