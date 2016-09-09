@@ -1,4 +1,6 @@
 /**
+ * # ClientJS Module
+ * 
  * [![Build Status](https://travis-ci.org/nxus/clientjs.svg?branch=master)](https://travis-ci.org/nxus/clientjs)
  * 
  * Compacts, processes and bundles code for inclusion in the browser.  Uses browserify and babel to process source files, and makes
@@ -10,16 +12,9 @@
  * 
  * ## Configuration Options
  * 
- *     'config': {
  *       'clientjs': {
- *         'watchify': true,
- *         'routePrefix': '/url/prefix/for/generated', //optional additional prefix, defaults to ''
- *         'assetFolder': '/local/output/folder', //optional output folder, defaults to .tmp within your project directory
- *         'entries': { //manually specify static files to be created
- *           '/path/source/file.js': '/path/output/bundle.js'
- *         }
+ *         'babel': {} // Babel specific options. Defaults to the project .babelrc file
  *       }
- *     }
  *
  * ## Usage
  *
@@ -52,12 +47,10 @@
  *
  *     npm install --save babel-preset-es2015 babel-preset-react
  *
- *     'config': {
  *       'clientjs': {
  *         'babel': {
  *           'presets': ['es2015', 'react']
  *         }
- *       }
  *
  * # API
  * --------
