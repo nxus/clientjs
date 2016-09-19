@@ -1,6 +1,21 @@
+'use strict'
+
+import browserify from 'browserify'
+import babelify from 'babelify'
+import watchify from 'watchify'
+import path from 'path'
+import fs from 'fs-extra'
+import rc from 'rc'
+import _ from 'underscore'
+import morph from 'morph'
+
+import {router} from 'nxus-router'
+import {templater} from 'nxus-templater'
+
+import {application as app, NxusModule} from 'nxus-core'
+
 /**
- * # ClientJS Module
- * 
+ *
  * [![Build Status](https://travis-ci.org/nxus/clientjs.svg?branch=master)](https://travis-ci.org/nxus/clientjs)
  * 
  * Compacts, processes and bundles code for inclusion in the browser.  Uses browserify and babel to process source files, and makes
@@ -45,32 +60,17 @@
  *
  * You will need to install the necessary babel presets in your application, and add the config option `babelPresets`, like:
  *
+ * ```javascript
  *     npm install --save babel-preset-es2015 babel-preset-react
+ * ```
  *
+ * ```
  *       'clientjs': {
  *         'babel': {
  *           'presets': ['es2015', 'react']
  *         }
- *
- * # API
- * --------
+ * ```
  */
-'use strict'
-
-import browserify from 'browserify'
-import babelify from 'babelify'
-import watchify from 'watchify'
-import path from 'path'
-import fs from 'fs-extra'
-import rc from 'rc'
-import _ from 'underscore'
-import morph from 'morph'
-
-import {router} from 'nxus-router'
-import {templater} from 'nxus-templater'
-
-import {application as app, NxusModule} from 'nxus-core'
-
 class ClientJS extends NxusModule {
   constructor () {
     super()
