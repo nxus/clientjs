@@ -156,7 +156,7 @@ class ClientJS extends NxusModule {
     let bundle = () => {
       b.bundle()
         .on('error', (err) => {
-          this.log.debug('Bundle error for', entry, err)
+          this.log.error('Bundle error for', entry, err)
         })
         .on('log', (msg) => {
           this.log.debug('Bundle for', entry, msg)
