@@ -1,8 +1,8 @@
 # nxus-clientjs
 
-## 
+## ClientJS
 
-## ClientJS Module
+**Extends NxusModule**
 
 [![Build Status](https://travis-ci.org/nxus/clientjs.svg?branch=master)](https://travis-ci.org/nxus/clientjs)
 
@@ -48,18 +48,16 @@ Or
 
 You will need to install the necessary babel presets in your application, and add the config option `babelPresets`, like:
 
+```javascript
     npm install --save babel-preset-es2015 babel-preset-react
+```
 
-      'clientjs': {
-        'babel': {
-          'presets': ['es2015', 'react']
-        }
+          'clientjs': {
+            'babel': {
+              'presets': ['es2015', 'react']
+            }
 
-## API
-
-* * *
-
-## includeScript
+### includeScript
 
 Injects the passed script into to the specified template
 
@@ -68,7 +66,7 @@ Injects the passed script into to the specified template
 -   `templateName` **[String](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)** the name of the template to include the script into
 -   `script` **\[type]** the path of the script file to include
 
-## bundle
+### bundle
 
 Create a clientjs bundle that can be injected into a rendered page.
 
