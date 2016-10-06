@@ -1,9 +1,12 @@
 'use strict'
 
+import Promise from 'bluebird'
 import browserify from 'browserify'
 import babelify from 'babelify'
 import watchify from 'watchify'
 import path from 'path'
+import child_process_ from 'child_process'
+let child_process = Promise.promisifyAll(child_process_)
 import fs from 'fs-extra'
 import rc from 'rc'
 import _ from 'underscore'
@@ -104,8 +107,9 @@ class ClientJS extends NxusModule {
    * @param  {[type]} script       the path of the script file to include
    */
   includeScript(templateName, script) {
-    let outputPath = morph.toDashed(templateName)+'/script.js'
-    let outputUrl = '/assets/clientjs/'+outputPath
+    let scriptName = path.basename(script)
+    let outputPath = path.join(morph.toDashed(templateName), scriptName)
+    let outputUrl = path.join(this.config.routePrefix,outputPath)
 
     templater.on('renderContext.'+templateName, () => {
       return {scripts: [outputUrl]}
@@ -113,6 +117,50 @@ class ClientJS extends NxusModule {
 
     app.once('launch', () => {
       return this.bundle(script, outputPath)
+    })
+  }
+
+  /**
+   * Injects the passed web component into to the specified template
+   * @param  {String} templateName the name of the template to include the script into
+   * @param  {[type]} script       the path of the component file to include
+   */
+  includeComponent(templateName, script, webcomponentsURL="/js/webcomponentsjs/webcomponents-lite.min.js") {
+    let scriptName = path.basename(script)
+    let outputPath = path.join(morph.toDashed(templateName), scriptName)
+    let outputHTML = path.join(this.config.routePrefix,outputPath)
+    let outputJS = outputHTML+".js"
+
+    templater.on('renderContext.'+templateName, () => {
+      return {
+        headScripts: [webcomponentsURL, outputJS],
+        imports: [outputHTML]
+      }
+    })
+
+    app.once('launch', () => {
+      return this.componentize(script, outputPath)
+    })
+  }
+
+  componentize(entry, outputHTML) {
+    var outputRoute = this.config.routePrefix+path.dirname(outputHTML)
+    var outputPath = path.resolve(this.config.assetFolder+path.dirname(outputHTML))
+    var outputFile = path.join(outputPath, path.basename(outputHTML))
+    if (!(outputPath in this._outputPaths)) {
+      this._outputPaths[outputPath] = true
+      app.get('router').staticRoute(outputRoute, outputPath)
+    }
+
+    let cmd = "vulcanize " + entry + " --inline-script --inline-html"
+    cmd += " | crisper --html " + outputFile + " --js " + outputFile+".js"
+    this.log.debug("Componentizing:", cmd)
+    return child_process.execAsync(cmd).then((error, stdout, stderr) => {
+      if(error) this.log.error("Componentize Error", error)
+      this.log.debug("Componentize Out", stdout)
+      this.log.debug("Componentize Err", stderr)
+    }).catch((e) {
+      this.log.error("Componentize Error", e)
     })
   }
   

@@ -32,6 +32,7 @@
     "babelify": "^7.3.0",
     "bluebird": "^3.0.6",
     "browserify": "^12.0.1",
+    "crisper": "^2.0.2",
     "fs-extra": "^0.30.0",
     "minifyify": "^7.3.3",
     "morph": "^0.2.0",
@@ -40,6 +41,7 @@
     "nxus-templater": "^4.0.0-0",
     "traverse": "^0.6.6",
     "underscore": "^1.8.3",
+    "vulcanize": "^1.14.8",
     "watchify": "^3.6.1"
   },
   "devDependencies": {
