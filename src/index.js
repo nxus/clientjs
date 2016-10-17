@@ -87,7 +87,7 @@ class ClientJS extends NxusModule {
     return {     
       watchify: true,
       routePrefix: '/assets/clientjs',
-      assetFolder: '.tmp',
+      assetFolder: '.tmp/clientjs',
       entries: {}
     }
   }
@@ -127,7 +127,7 @@ class ClientJS extends NxusModule {
    */
   includeComponent(templateName, script, webcomponentsURL="/js/webcomponentsjs/webcomponents-lite.min.js") {
     let scriptName = path.basename(script)
-    let outputPath = path.join(morph.toDashed(templateName), scriptName)
+    let outputPath = morph.toDashed(templateName) + "-" + scriptName
     let outputHTML = path.join(this.config.routePrefix,outputPath)
     let outputJS = outputHTML+".js"
 
@@ -145,21 +145,17 @@ class ClientJS extends NxusModule {
 
   componentize(entry, outputHTML) {
     var outputRoute = this.config.routePrefix+path.dirname(outputHTML)
-    var outputPath = path.resolve(this.config.assetFolder+path.dirname(outputHTML))
+    var outputPath = path.resolve(path.join(this.config.assetFolder, path.dirname(outputHTML)))
     var outputFile = path.join(outputPath, path.basename(outputHTML))
-    if (!(outputPath in this._outputPaths)) {
-      this._outputPaths[outputPath] = true
-      app.get('router').staticRoute(outputRoute, outputPath)
-    }
+    let outputJS = outputFile+".js"
 
     let cmd = "vulcanize " + entry + " --inline-script --inline-html"
-    cmd += " | crisper --html " + outputFile + " --js " + outputFile+".js"
+    cmd += " | crisper --html " + outputFile + " --js " + outputJS
     this.log.debug("Componentizing:", cmd)
-    return child_process.execAsync(cmd).then((error, stdout, stderr) => {
-      if(error) this.log.error("Componentize Error", error)
-      this.log.debug("Componentize Out", stdout)
-      this.log.debug("Componentize Err", stderr)
-    }).catch((e) {
+    child_process.execAsync(cmd).then((error, stdout, stderr) => {
+      if (error) this.log.error("Componentize Error", error)
+      this.request("bundle", outputJS, path.basename(outputJS))
+    }).catch((e) => {
       this.log.error("Componentize Error", e)
     })
   }
@@ -183,7 +179,7 @@ class ClientJS extends NxusModule {
     
     if (!(outputPath in this._outputPaths)) {
       this._outputPaths[outputPath] = true
-      app.get('router').staticRoute(outputRoute, outputPath)
+      router.staticRoute(outputRoute, outputPath)
     }
     
     var options = {
