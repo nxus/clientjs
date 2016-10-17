@@ -144,17 +144,26 @@ class ClientJS extends NxusModule {
   }
 
   componentize(entry, outputHTML) {
-    var outputRoute = this.config.routePrefix+path.dirname(outputHTML)
-    var outputPath = path.resolve(path.join(this.config.assetFolder, path.dirname(outputHTML)))
+    let outputHTMLDir = path.dirname(outputHTML)
+    if (outputHTMLDir == '.') {
+      outputHTMLDir = ''
+    }
+    var outputRoute = this.config.routePrefix+outputHTMLDir
+    var outputPath = path.resolve(path.join(this.config.assetFolder, outputHTMLDir))
     var outputFile = path.join(outputPath, path.basename(outputHTML))
     let outputJS = outputFile+".js"
 
+    if (!(outputPath in this._outputPaths)) {
+      this._outputPaths[outputPath] = true
+      router.staticRoute(outputRoute, outputPath)
+    }
+    
     let cmd = "vulcanize " + entry + " --inline-script --inline-html"
     cmd += " | crisper --html " + outputFile + " --js " + outputJS
     this.log.debug("Componentizing:", cmd)
     child_process.execAsync(cmd).then((error, stdout, stderr) => {
       if (error) this.log.error("Componentize Error", error)
-      this.request("bundle", outputJS, path.basename(outputJS))
+//      this.request("bundle", outputJS, path.basename(outputJS))
     }).catch((e) => {
       this.log.error("Componentize Error", e)
     })
