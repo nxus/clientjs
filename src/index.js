@@ -30,7 +30,7 @@ import {application as app, NxusModule} from 'nxus-core'
  * 
  * ## Configuration Options
  * 
- *       'clientjs': {
+ *       'client-js': {
  *         'babel': {} // Babel specific options. Defaults to the project .babelrc file
  *       }
  *
@@ -68,7 +68,7 @@ import {application as app, NxusModule} from 'nxus-core'
  * ```
  *
  * ```
- *       'clientjs': {
+ *       'client-js': {
  *         'babel': {
  *           'presets': ['es2015', 'react']
  *         }
