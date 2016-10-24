@@ -88,6 +88,8 @@ class ClientJS extends NxusModule {
       watchify: true,
       routePrefix: '/assets/clientjs',
       assetFolder: '.tmp/clientjs',
+      webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
+      reincludeComponentScripts: {},
       entries: {}
     }
   }
@@ -125,16 +127,23 @@ class ClientJS extends NxusModule {
    * @param  {String} templateName the name of the template to include the script into
    * @param  {[type]} script       the path of the component file to include
    */
-  includeComponent(templateName, script, webcomponentsURL="/js/webcomponentsjs/webcomponents-lite.min.js") {
+  includeComponent(templateName, script) {
     let scriptName = path.basename(script)
     let outputPath = morph.toDashed(templateName) + "-" + scriptName
     let outputHTML = path.join(this.config.routePrefix,outputPath)
     let outputJS = outputHTML+".js"
 
+    let imports = []
+    for (let s in this.config.reincludeComponentScripts) {
+      imports.push(this.config.reincludeComponentScripts[s])
+    }
+    imports.push(outputHTML)
+    imports.push(outputJS)
+
     templater.on('renderContext.'+templateName, () => {
       return {
-        headScripts: [webcomponentsURL, outputJS],
-        imports: [outputHTML]
+        headScripts: [this.config.webcomponentsURL],
+        imports
       }
     })
 
@@ -157,13 +166,18 @@ class ClientJS extends NxusModule {
       this._outputPaths[outputPath] = true
       router.staticRoute(outputRoute, outputPath)
     }
+
+    let exclude = ""
+    for (let s in this.config.reincludeComponentScripts) {
+      exclude += " --strip-exclude " + s
+    }
     
-    let cmd = "vulcanize " + entry + " --inline-script --inline-html"
+    let cmd = "vulcanize " + exclude + " --inline-script --inline-html " + entry
     cmd += " | crisper --html " + outputFile + " --js " + outputJS
+    cmd += " ; babel -o " + outputJS + " " + outputJS
     this.log.debug("Componentizing:", cmd)
     child_process.execAsync(cmd).then((error, stdout, stderr) => {
       if (error) this.log.error("Componentize Error", error)
-//      this.request("bundle", outputJS, path.basename(outputJS))
     }).catch((e) => {
       this.log.error("Componentize Error", e)
     })
