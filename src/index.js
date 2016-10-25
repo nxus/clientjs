@@ -138,7 +138,6 @@ class ClientJS extends NxusModule {
       imports.push(this.config.reincludeComponentScripts[s])
     }
     imports.push(outputHTML)
-    imports.push(outputJS)
 
     templater.on('renderContext.'+templateName, () => {
       return {
@@ -172,8 +171,8 @@ class ClientJS extends NxusModule {
       exclude += " --strip-exclude " + s
     }
     
-    let cmd = "vulcanize " + exclude + " --inline-script --inline-html " + entry
-    cmd += " | crisper --html " + outputFile + " --js " + outputJS
+    let cmd = "vulcanize" + exclude + " --inline-script --inline-html " + entry
+    cmd += " | crisper --script-in-head false --html " + outputFile + " --js " + outputJS
     cmd += " ; babel -o " + outputJS + " " + outputJS
     this.log.debug("Componentizing:", cmd)
     child_process.execAsync(cmd).then((error, stdout, stderr) => {
