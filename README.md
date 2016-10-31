@@ -74,7 +74,6 @@ Injects the passed web component into to the specified template
 
 -   `templateName` **[String](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)** the name of the template to include the script into
 -   `script` **\[type]** the path of the component file to include
--   `webcomponentsURL`   (optional, default `"/js/webcomponentsjs/webcomponents-lite.min.js"`)
 
 ### bundle
 
