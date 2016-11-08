@@ -170,8 +170,16 @@ class ClientJS extends NxusModule {
     if (this._componentCache[entry]) {
       let [p, h, j] = this._componentCache[entry]
       return p.then(() => {
-        fs.unlinkSync(outputFile)
-        fs.unlinkSync(outputJS)
+        try {
+          let fstat = fs.lstatSync(outputFile)
+          if (fstat.isSymbolicLink() || fstat.isFile())
+            fs.unlinkSync(outputFile)
+        } catch (e) {}
+        try {
+        let jstat = fs.lstatSync(outputJS)
+        if (jstat.isSymbolicLink() || jstat.isFile())
+          fs.unlinkSync(outputJS)
+        } catch (e) {}
         fs.symlinkSync(h, outputFile)
         fs.symlinkSync(j, outputJS)
       })
