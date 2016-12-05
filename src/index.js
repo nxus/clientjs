@@ -86,6 +86,18 @@ class ClientJS extends NxusModule {
 
     if(_.isEmpty(this.config.babel)) this.config.babel = _.omit(require('rc')('babel', {}), '_', 'config', 'configs')
     this._fromConfigBundles(app)
+
+
+    this._builders = []
+    this.readyToBuild = new Promise((resolve, reject) => {
+      app.on('launch', () => {
+        resolve()
+      })
+    }).then(::this.buildingWhenReady)
+    if (this.config.buildOnly) {
+      this.readyToBuild.then(::app.stop).then(::process.exit)
+    }
+    
   }
 
   _defaultConfig() {
@@ -95,7 +107,9 @@ class ClientJS extends NxusModule {
       assetFolder: '.tmp/clientjs',
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
       reincludeComponentScripts: {},
-      entries: {}
+      entries: {},
+      buildSeries: false,
+      buildOnly: false
     }
   }
 
@@ -106,6 +120,18 @@ class ClientJS extends NxusModule {
         this.bundle(entry, output)
       })
     }
+  }
+
+  buildWhenReady(builder) {
+    this._builders.push(builder)
+  }
+
+  buildingWhenReady() {
+    let op = Promise.map
+    if (this.config.buildSeries) {
+      op = Promise.mapSeries
+    }
+    return op(this._builders, (x) => {return x()})
   }
 
   /**
@@ -122,7 +148,7 @@ class ClientJS extends NxusModule {
       return {scripts: [outputUrl]}
     })
 
-    app.once('launch', () => {
+    this.buildWhenReady(() => {
       return this.bundle(script, outputPath)
     })
   }
@@ -151,7 +177,7 @@ class ClientJS extends NxusModule {
       }
     })
 
-    app.once('launch', () => {
+    this.buildWhenReady(() => {
       return this.componentize(script, outputPath)
     })
   }
@@ -197,19 +223,20 @@ class ClientJS extends NxusModule {
     let cmd = "vulcanize" + exclude + " --inline-script --inline-html " + entry
     cmd += " | crisper --script-in-head false --html " + outputFile + " --js " + outputJS
     this.log.debug("Componentizing:", cmd)
-    // wait for componentize but not babel
     let promise = child_process.execAsync(cmd).then((error, stdout, stderr) => {
       if (error) this.log.error("Componentize Error", error)
       if (stderr) this.log.error("Componentize Error", stderr)
-      child_process.execAsync("babel -o " + outputJS + " " + outputJS)
+      return child_process.execAsync("babel -o " + outputJS + " " + outputJS)
         .then((error, stdout, stderr) => {
           if (error) this.log.error("Babel Error", error)
           if (stderr) this.log.error("Babel Error", stderr)
+          this.log.debug("Done with component", outputFile)
         })
     }).catch((e) => {
       this.log.error("Componentize Error", e)
     })
     this._componentCache[entry] = [promise, outputFile, outputJS]
+    return promise
   }
   
   /**
