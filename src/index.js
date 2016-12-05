@@ -31,7 +31,11 @@ import {application as app, NxusModule} from 'nxus-core'
  * ## Configuration Options
  * 
  *       'client-js': {
- *         'babel': {} // Babel specific options. Defaults to the project .babelrc file
+ *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file
+ *         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
+ *         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
+ *         'webcomponentsURL': 'js/wc-min.js', // URL to include for WC polyfill
+ *         'reincludeComponentScripts': {} // components to ignore from babel compilation but include in scripts
  *       }
  *
  * ## Usage
