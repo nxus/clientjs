@@ -15,7 +15,7 @@ the processed file available via a static route.
 
 ### Configuration Options
 
-      'client-js': {
+      'client_js': {
         'babel': {}, // Babel specific options. Defaults to the project .babelrc file
         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
@@ -56,7 +56,7 @@ You will need to install the necessary babel presets in your application, and ad
     npm install --save babel-preset-es2015 babel-preset-react
 ```
 
-          'client-js': {
+          'client_js': {
             'babel': {
               'presets': ['es2015', 'react']
             }
