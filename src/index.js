@@ -30,7 +30,7 @@ import {application as app, NxusModule} from 'nxus-core'
  * 
  * ## Configuration Options
  * 
- *       'client-js': {
+ *       'client_js': {
  *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file
  *         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
  *         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
@@ -72,7 +72,7 @@ import {application as app, NxusModule} from 'nxus-core'
  * ```
  *
  * ```
- *       'client-js': {
+ *       'client_js': {
  *         'babel': {
  *           'presets': ['es2015', 'react']
  *         }
