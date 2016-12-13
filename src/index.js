@@ -72,7 +72,7 @@ import {application as app, NxusModule} from 'nxus-core'
  * ```
  *
  * ```
- *       'client-js': {
+ *       'client_js': {
  *         'babel': {
  *           'presets': ['es2015', 'react']
  *         }
