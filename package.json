@@ -1,6 +1,6 @@
 {
   "name": "nxus-clientjs",
-  "version": "4.0.0-4",
+  "version": "4.0.0-5",
   "description": "Client JS compilation for Nxus applications",
   "main": "lib/",
   "scripts": {
@@ -36,7 +36,7 @@
     "fs-extra": "^0.30.0",
     "minifyify": "^7.3.3",
     "morph": "^0.2.0",
-    "nxus-core": "^4.0.0-0",
+    "nxus-core": "^4.0.0-3",
     "nxus-router": "^4.0.0-0",
     "nxus-templater": "^4.0.0-0",
     "rc": "^1.1.6",

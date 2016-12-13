@@ -82,9 +82,22 @@ class ClientJS extends NxusModule {
   constructor () {
     super()
     this._outputPaths = {}
+    this._componentCache = {}
 
     if(_.isEmpty(this.config.babel)) this.config.babel = _.omit(require('rc')('babel', {}), '_', 'config', 'configs')
     this._fromConfigBundles(app)
+
+
+    this._builders = []
+    this.readyToBuild = new Promise((resolve, reject) => {
+      app.on('launch', () => {
+        resolve()
+      })
+    }).then(::this.buildingWhenReady)
+    if (this.config.buildOnly) {
+      this.readyToBuild.then(::app.stop).then(::process.exit)
+    }
+    
   }
 
   _defaultConfig() {
@@ -94,7 +107,10 @@ class ClientJS extends NxusModule {
       assetFolder: '.tmp/clientjs',
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
       reincludeComponentScripts: {},
-      entries: {}
+      entries: {},
+      buildSeries: false,
+      buildOnly: false,
+      buildNone: false
     }
   }
 
@@ -105,6 +121,21 @@ class ClientJS extends NxusModule {
         this.bundle(entry, output)
       })
     }
+  }
+
+  buildWhenReady(builder) {
+    this._builders.push(builder)
+  }
+
+  buildingWhenReady() {
+    if (this.config.buildNone) {
+      return
+    }
+    let op = Promise.map
+    if (this.config.buildSeries) {
+      op = Promise.mapSeries
+    }
+    return op(this._builders, (x) => {return x()})
   }
 
   /**
@@ -121,7 +152,7 @@ class ClientJS extends NxusModule {
       return {scripts: [outputUrl]}
     })
 
-    app.once('launch', () => {
+    this.buildWhenReady(() => {
       return this.bundle(script, outputPath)
     })
   }
@@ -150,7 +181,7 @@ class ClientJS extends NxusModule {
       }
     })
 
-    app.once('launch', () => {
+    this.buildWhenReady(() => {
       return this.componentize(script, outputPath)
     })
   }
@@ -170,6 +201,24 @@ class ClientJS extends NxusModule {
       router.staticRoute(outputRoute, outputPath)
     }
 
+    if (this._componentCache[entry]) {
+      let [p, h, j] = this._componentCache[entry]
+      return p.then(() => {
+        try {
+          let fstat = fs.lstatSync(outputFile)
+          if (fstat.isSymbolicLink() || fstat.isFile())
+            fs.unlinkSync(outputFile)
+        } catch (e) {}
+        try {
+        let jstat = fs.lstatSync(outputJS)
+        if (jstat.isSymbolicLink() || jstat.isFile())
+          fs.unlinkSync(outputJS)
+        } catch (e) {}
+        fs.symlinkSync(h, outputFile)
+        fs.symlinkSync(j, outputJS)
+      })
+    }
+
     let exclude = ""
     for (let s in this.config.reincludeComponentScripts) {
       exclude += " --strip-exclude " + s
@@ -177,13 +226,21 @@ class ClientJS extends NxusModule {
     
     let cmd = "vulcanize" + exclude + " --inline-script --inline-html " + entry
     cmd += " | crisper --script-in-head false --html " + outputFile + " --js " + outputJS
-    cmd += " ; babel -o " + outputJS + " " + outputJS
     this.log.debug("Componentizing:", cmd)
-    child_process.execAsync(cmd).then((error, stdout, stderr) => {
+    let promise = child_process.execAsync(cmd).then((error, stdout, stderr) => {
       if (error) this.log.error("Componentize Error", error)
+      if (stderr) this.log.error("Componentize Error", stderr)
+      return child_process.execAsync("babel -o " + outputJS + " " + outputJS)
+        .then((error, stdout, stderr) => {
+          if (error) this.log.error("Babel Error", error)
+          if (stderr) this.log.error("Babel Error", stderr)
+          this.log.debug("Done with component", outputFile)
+        })
     }).catch((e) => {
       this.log.error("Componentize Error", e)
     })
+    this._componentCache[entry] = [promise, outputFile, outputJS]
+    return promise
   }
   
   /**

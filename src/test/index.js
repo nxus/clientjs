@@ -42,7 +42,7 @@ describe('ClientJS', () => {
 
   describe('Init', () => {
     beforeEach(() => {
-      app.config['client-js'] = {
+      app.config['client_js'] = {
         entries: {
           'test/apps/one.js': 'test/apps/one-bundled.js',
           'test/apps/two.js': 'test/apps/two-bundled.js'
@@ -60,7 +60,7 @@ describe('ClientJS', () => {
 
     it('should use the default babelrc config', () => {
       should.exist(clientjs.config.babel)
-      should.exist(clientjs.config.babel['presets'])
+      should.exist(clientjs.config.babel['plugins'])
     })
   });
   describe('Bundle', () => {
@@ -78,7 +78,7 @@ describe('ClientJS', () => {
     });
     
     it('should create bundle one', (done) => {
-      fs.access(path.resolve('.tmp/test/apps/one-bundled.js'), (err) => {
+      fs.access(path.resolve('.tmp/clientjs/test/apps/one-bundled.js'), (err) => {
         (err == null).should.be.true;
         done();
       });
