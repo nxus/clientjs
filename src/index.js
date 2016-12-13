@@ -85,7 +85,6 @@ class ClientJS extends NxusModule {
 
     if(_.isEmpty(this.config.babel)) this.config.babel = _.omit(require('rc')('babel', {}), '_', 'config', 'configs')
     this._fromConfigBundles(app)
-    this.log.debug( "clientjs bable config: ", this.config.babel)
   }
 
   _defaultConfig() {
