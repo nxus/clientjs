@@ -30,7 +30,7 @@ import {application as app, NxusModule} from 'nxus-core'
  * 
  * ## Configuration Options
  * 
- *       'client-js': {
+ *       'client_js': {
  *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file
  *         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
  *         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
@@ -85,6 +85,7 @@ class ClientJS extends NxusModule {
 
     if(_.isEmpty(this.config.babel)) this.config.babel = _.omit(require('rc')('babel', {}), '_', 'config', 'configs')
     this._fromConfigBundles(app)
+    this.log.debug( "clientjs bable config: ", this.config.babel)
   }
 
   _defaultConfig() {
