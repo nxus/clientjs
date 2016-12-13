@@ -96,6 +96,9 @@ class ClientJS extends NxusModule {
     }).then(::this.buildingWhenReady)
     if (this.config.buildOnly) {
       this.readyToBuild.then(::app.stop).then(::process.exit)
+    } else {
+      this._outputPaths[this.config.assetFolder] = true
+      router.staticRoute(this.config.routePrefix, this.config.assetFolder)
     }
     
   }
