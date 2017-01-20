@@ -281,7 +281,7 @@ class ClientJS extends NxusModule {
       .transform(babelify.configure(this.config.babel))
       .plugin('minifyify', {map: outputMapUrl, output: outputMap})
       .on('log', (msg) => {
-        this.log.debug('Bundle for', entry, msg)
+        this.log.debug('Browserify bundle for', entry, msg)
       })
     let bundle = () => {
       b.bundle()
@@ -289,11 +289,11 @@ class ClientJS extends NxusModule {
           this.log.error('Bundle error for', entry, err)
         })
         .on('log', (msg) => {
-          this.log.debug('Bundle for', entry, msg)
+          this.log.debug('B Bundle for', entry, msg)
         })
         .pipe(fs.createWriteStream(outputFile))
     }
-    b.on('update', bundle)
+    //b.on('update', bundle)
     bundle()
   }
 }
