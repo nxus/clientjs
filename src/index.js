@@ -217,8 +217,8 @@ class ClientJS extends NxusModule {
         if (jstat.isSymbolicLink() || jstat.isFile())
           fs.unlinkSync(outputJS)
         } catch (e) {}
-        fs.symlinkSync(h, outputFile)
-        fs.symlinkSync(j, outputJS)
+        fs.copySync(h, outputFile)
+        fs.copySync(j, outputJS)
       })
     }
 
