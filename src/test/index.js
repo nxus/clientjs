@@ -1,10 +1,11 @@
-'use strict';
+/* globals before: false, beforeEach: false, describe: false, it: false */
+
+'use strict'
 
 import fs from 'fs'
 import path from 'path'
 
-import ClientJS from '../'
-import {clientjs as clientjsProxy} from '../'
+import ClientJS, {clientjs as clientjsProxy} from '../'
 
 import sinon from 'sinon'
 
@@ -12,20 +13,44 @@ import {application as app} from 'nxus-core'
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
 
-import {should as Should} from 'chai'
+import chai from 'chai'
+let should = chai.should(),
+    expect = chai.expect
 
-var should = Should()
+const configBabel = { presets: [ 'es2015' ] }
+const configEntries = {
+  'src/test/apps/one.js': 'test/apps/one-bundled.js',
+  'src/test/apps/two.js': 'test/apps/two-bundled.js'
+}
+
+/* Create a new ClientJS instance.
+ * First initialize the application `client_js` configuration, so it has
+ * well-known settings for the instance.
+ */
+function makeClientJS(config) {
+  app.config['client_js'] = Object.assign({ babel: configBabel}, app.config['client_js'], config)
+  // if (config) app.config['client_js'] = Object.assign({}, app.config['client_js'], config)
+  return new ClientJS()
+}
 
 describe('ClientJS', () => {
-  var clientjs;
+  var clientjs, refs = {};
 
   before(() => {
     sinon.spy(app, 'once')
     sinon.spy(app, 'onceAfter')
     sinon.spy(clientjsProxy, 'respond')
     sinon.spy(clientjsProxy, 'request')
+
+    // load reference copies of bundled files (for comparison)
+    for (let key in configEntries) {
+      let p = configEntries[key].replace('test/apps/', 'src/test/data/')
+      p = path.resolve(p)
+      let ref = fs.readFileSync(p, 'utf8')
+      refs[key] = ref
+    }
   })
-  
+
   describe('Load', () => {
     it('should not be null', () => ClientJS.should.not.be.null)
 
@@ -35,53 +60,50 @@ describe('ClientJS', () => {
     })
 
     it('should be instantiated', () => {
-      clientjs = new ClientJS();
+      clientjs = makeClientJS();
       clientjs.should.not.be.null;
     });
   });
 
   describe('Init', () => {
     beforeEach(() => {
-      app.config['client_js'] = {
-        entries: {
-          'test/apps/one.js': 'test/apps/one-bundled.js',
-          'test/apps/two.js': 'test/apps/two-bundled.js'
-        }
-      };
-      
-      clientjs = new ClientJS();
-    });
-    
-    it('should have the config', () => {
-      should.exist(clientjs.config.entries)
-      should.exist(clientjs.config.entries['test/apps/one.js'])
-      clientjs.config.entries['test/apps/one.js'].should.eql('test/apps/one-bundled.js')
+      clientjs = makeClientJS({entries: configEntries});
     });
 
-    it('should use the default babelrc config', () => {
+    it('should have the config', () => {
+      should.exist(clientjs.config.entries)
+      for (let key in configEntries)
+        clientjs.config.entries.should.have.property(key, configEntries[key])
+    });
+
+    it('should use the application client_js config', () => {
       should.exist(clientjs.config.babel)
-      should.exist(clientjs.config.babel['plugins'])
+      clientjs.config.babel.should.have.property('presets')
     })
   });
   describe('Bundle', () => {
+    let entry = Object.keys(configEntries)[0],
+        output = configEntries[entry]
+
     before(() => {
       router.staticRoute = sinon.spy()
     })
-    
+
     beforeEach(() => {
       try {
-        fs.unlinkSync(path.resolve('test/apps/one-bundled.js'))
+        fs.unlinkSync(path.resolve('.tmp/clientjs/'+output))
       } catch (e) {}
-      
-      clientjs = new ClientJS();
-      clientjs.bundle('test/apps/one.js', 'test/apps/one-bundled.js');
+      clientjs = makeClientJS();
+      return clientjs.bundle(entry, output);
     });
-    
+
     it('should create bundle one', (done) => {
-      fs.access(path.resolve('.tmp/clientjs/test/apps/one-bundled.js'), (err) => {
-        (err == null).should.be.true;
-        done();
-      });
+      let p = path.resolve('.tmp/clientjs/'+output)
+      fs.readFile(p, 'utf8', (err, data) => {
+        expect(err).to.be.null
+        data.should.equal(refs[entry])
+        done()
+      })
     });
 
     it('should provide asset routes', (done)=> {
@@ -93,7 +115,7 @@ describe('ClientJS', () => {
   describe('Include Script', () => {
     before(() => {
       sinon.spy(templater, 'on')
-      clientjs = new ClientJS();
+      clientjs = makeClientJS();
       clientjs.includeScript('my-template', 'tests/apps/one.js');
       app.emit('launch')
     });

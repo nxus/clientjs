@@ -8,7 +8,6 @@ import path from 'path'
 import child_process_ from 'child_process'
 let child_process = Promise.promisifyAll(child_process_)
 import fs from 'fs-extra'
-import rc from 'rc'
 import _ from 'underscore'
 import morph from 'morph'
 
@@ -84,7 +83,8 @@ class ClientJS extends NxusModule {
     this._outputPaths = {}
     this._componentCache = {}
 
-    if(_.isEmpty(this.config.babel)) this.config.babel = _.omit(require('rc')('babel', {}), '_', 'config', 'configs')
+    if(_.isEmpty(this.config.babel))
+      this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
     this._fromConfigBundles(app)
 
 
@@ -284,17 +284,20 @@ class ClientJS extends NxusModule {
         this.log.debug('Browserify bundle for', entry, msg)
       })
     let bundle = () => {
-      b.bundle()
-        .on('error', (err) => {
-          this.log.error('Bundle error for', entry, err)
+      return new Promise((resolve, reject) => {
+        b.bundle((err, buf) => {
+          if (err) {
+            this.log.error('Bundle error for', entry, err)
+            reject(err)
+            return
+          }
+          fs.writeFileSync(outputFile, buf)
+          resolve()
         })
-        .on('log', (msg) => {
-          this.log.debug('B Bundle for', entry, msg)
-        })
-        .pipe(fs.createWriteStream(outputFile))
+      })
     }
     //b.on('update', bundle)
-    bundle()
+    return bundle()
   }
 }
 

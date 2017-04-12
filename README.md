@@ -6,8 +6,9 @@
 
 [![Build Status](https://travis-ci.org/nxus/clientjs.svg?branch=master)](https://travis-ci.org/nxus/clientjs)
 
-Compacts, processes and bundles code for inclusion in the browser.  Uses browserify and babel to process source files, and makes
-the processed file available via a static route.
+Compacts, processes and bundles code for inclusion in the browser. Uses
+browserify (configured with babelify and minifyify) to process source
+files, and makes the processed file available via a static route.
 
 ### Installation
 
@@ -60,6 +61,14 @@ You will need to install the necessary babel presets in your application, and ad
             'babel': {
               'presets': ['es2015', 'react']
             }
+
+The minifyify plugin uses uglify-js, which supports only ECMAScript 5
+(ES5) in its released version. If you are supplying ES2015+ (ES6+) code
+to clientjs, your `client_js` Babel configuration should specify the
+`es2015` preset to avoid parse errors. This is likely to be different
+from your server-side Babel configuration, which can rely on native
+node.js support for more modern JavaScript features, without Babel
+transformation.
 
 ### includeScript
 
