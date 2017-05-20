@@ -14,6 +14,8 @@ import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
 
 import chai from 'chai'
+import chaiAsPromised from 'chai-as-promised'
+chai.use(chaiAsPromised)
 let should = chai.should(),
     expect = chai.expect
 
@@ -109,6 +111,32 @@ describe('ClientJS', () => {
     it('should provide asset routes', (done)=> {
       router.staticRoute.calledWith('/assets/clientjs/test/apps').should.be.true
       done();
+    });
+  });
+
+  describe('Bundle Missing Entry', () => {
+    let entry = 'src/test/apps/missing.js',
+        output = 'test/apps/missing-bundled.js'
+
+    it('should reject with error', () => {
+      return clientjs.bundle(entry, output).should.be.rejectedWith(Error)
+    })
+    it('should not create bundle', () => {
+      let p = path.resolve('.tmp/clientjs/'+output)
+      expect(fs.existsSync(p)).to.be.false
+    });
+  });
+
+  describe('Bundle Invalid Entry', () => {
+    let entry = 'src/test/apps/invalid.js',
+        output = 'test/apps/invalid-bundled.js'
+
+    it('should reject with error', () => {
+      return clientjs.bundle(entry, output).should.be.rejectedWith(Error)
+    })
+    it('should not create bundle', () => {
+      let p = path.resolve('.tmp/clientjs/'+output)
+      expect(fs.existsSync(p)).to.be.false
     });
   });
 

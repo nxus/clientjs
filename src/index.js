@@ -280,19 +280,22 @@ class ClientJS extends NxusModule {
     let b = browserify(options)
       .transform(babelify.configure(this.config.babel))
       .plugin('minifyify', {map: outputMapUrl, output: outputMap})
-      .on('log', (msg) => {
-        this.log.debug('Browserify bundle for', entry, msg)
-      })
     let bundle = () => {
       return new Promise((resolve, reject) => {
         b.bundle((err, buf) => {
           if (err) {
-            this.log.error('Bundle error for', entry, err)
+            this.log.error(`Browserify bundle error for ${entry}`, err)
             reject(err)
             return
           }
           fs.writeFileSync(outputFile, buf)
+          this.log.debug(`Browserify bundle for ${entry}, ${buf.byteLength} bytes written`)
           resolve()
+        })
+        .on('error', (err) => {
+          // browserify pipeline errors aren't delivered to completion handler; have to catch them here
+          this.log.error(`Browserify bundle error event for ${entry}`, err.toString())
+          reject(err)
         })
       })
     }
