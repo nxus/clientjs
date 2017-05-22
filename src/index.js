@@ -62,19 +62,29 @@ import {application as app, NxusModule} from 'nxus-core'
  *          return {scripts: ['/browser/path/to/file.js']}
  *     })
  * 
- * ### Using ClientJS with React (or other babel transforms)
+ * ### Using ClientJS with Babel transforms
  *
- * You will need to install the necessary babel presets in your application, and add the config option `babelPresets`, like:
+ * You will need to install the necessary Babel presets and plugins
+ * in your application, and add Babel configuration options to the
+ * `clientjs` section of your `.nxusrc` file. For example:
  *
  * ```javascript
- *     npm install --save babel-preset-es2015 babel-preset-react
+ *     npm install --save babel-preset-es2015 \
+ *       babel-plugin-transform-function-bind \
+ *       babel-plugin-transform-object-rest-spread
  * ```
  *
  * ```
- *       'client_js': {
- *         'babel': {
- *           'presets': ['es2015', 'react']
- *         }
+ *     "client_js": {
+ *         ...
+ *       "babel": {
+ *         "presets": [ "es2015" ],
+ *         "plugins": [
+ *           "transform-function-bind",
+ *           "transform-object-rest-spread"
+ *         ]
+ *       }
+ *     }
  * ```
  */
 class ClientJS extends NxusModule {
@@ -93,7 +103,7 @@ class ClientJS extends NxusModule {
       app.on('launch', () => {
         resolve()
       })
-    }).then(::this.buildingWhenReady)
+    }).then(::this._buildingWhenReady)
     if (this.config.buildOnly) {
       this.readyToBuild.then(::app.stop).then(::process.exit)
     } else {
@@ -117,7 +127,7 @@ class ClientJS extends NxusModule {
     }
   }
 
-  _fromConfigBundles (app) {
+  _fromConfigBundles(app) {
     for (var entry in this.config.entries) {
       var output = this.config.entries[entry]
       app.once('launch', () => {
@@ -126,11 +136,11 @@ class ClientJS extends NxusModule {
     }
   }
 
-  buildWhenReady(builder) {
+  _buildWhenReady(builder) {
     this._builders.push(builder)
   }
 
-  buildingWhenReady() {
+  _buildingWhenReady() {
     if (this.config.buildNone) {
       return
     }
@@ -155,7 +165,7 @@ class ClientJS extends NxusModule {
       return {scripts: [outputUrl]}
     })
 
-    this.buildWhenReady(() => {
+    this._buildWhenReady(() => {
       return this.bundle(script, outputPath)
     })
   }
@@ -184,12 +194,12 @@ class ClientJS extends NxusModule {
       }
     })
 
-    this.buildWhenReady(() => {
-      return this.componentize(script, outputPath)
+    this._buildWhenReady(() => {
+      return this._componentize(script, outputPath)
     })
   }
 
-  componentize(entry, outputHTML) {
+  _componentize(entry, outputHTML) {
     let outputHTMLDir = path.dirname(outputHTML)
     if (outputHTMLDir == '.') {
       outputHTMLDir = ''
@@ -251,7 +261,7 @@ class ClientJS extends NxusModule {
    * @param  {[type]} entry  the source file to bundle
    * @param  {[type]} output the output path to use in the browser to access the bundled source
    */
-  bundle (entry, output) {
+  bundle(entry, output) {
     this.log.debug('Bundling', entry, output)
 
     if(output && output[0] != '/') output = '/'+output //add prepending slash if not set
