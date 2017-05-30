@@ -4,6 +4,7 @@
 
 import fs from 'fs'
 import path from 'path'
+import Promise from 'bluebird'
 
 import ClientJS, {clientjs as clientjsProxy} from '../'
 
@@ -109,33 +110,44 @@ describe('ClientJS', () => {
   })
 
   describe('Load', () => {
-    it('should not be null', () => ClientJS.should.not.be.null)
-
     it('should not be null', () => {
-      ClientJS.should.not.be.null
-      clientjsProxy.should.not.be.null
-    })
-
-    it('should be instantiated', () => {
-      clientjs = makeClientJS()
-      clientjs.should.not.be.null
+      expect(ClientJS).to.not.be.null
+      expect(clientjsProxy).to.not.be.null
     })
   })
 
   describe('Init', () => {
-    beforeEach(() => {
+    before(() => {
+      router.staticRoute.reset()
+      for (let entry in configEntries)
+        clearOutputData(configEntries[entry], Object.keys(configRefs[entry]))
       clientjs = makeClientJS({entries: configEntries})
+      emitLifecycleEvent('launch')
+      return Promise.delay(2000)
+        // there's no way to await completion of the build, so we just delay for a while
+    })
+
+    it('should be instantiated', () => {
+      expect(clientjs).to.not.be.null
     })
 
     it('should have the config', () => {
-      should.exist(clientjs.config.entries)
-      for (let key in configEntries)
-        clientjs.config.entries.should.have.property(key, configEntries[key])
+      expect(clientjs.config.entries).to.exist
+      clientjs.config.entries.should.deep.equal(configEntries)
     })
 
     it('should use the application client_js config', () => {
-      should.exist(clientjs.config.babel)
-      clientjs.config.babel.should.have.property('presets')
+      expect(clientjs.config.babel).to.exist
+      clientjs.config.babel.should.deep.equal(configBabel)
+    })
+
+    it('should provide asset routes', ()=> {
+      router.staticRoute.calledWith('/assets/clientjs/test/apps').should.be.true
+    })
+
+    it('should create config bundles', () => {
+      for (let entry in configEntries)
+        compareReferenceData(configRefs[entry], configEntries[entry])
     })
   })
 
@@ -144,22 +156,19 @@ describe('ClientJS', () => {
         output = configEntries[entry]
 
     before(() => {
-      router.staticRoute.reset()
-    })
-
-    beforeEach(() => {
-      clearOutputData(output, Object.keys(configRefs[entry]))
       clientjs = makeClientJS()
-      return clientjs.bundle(entry, output)
+      emitLifecycleEvent('launch')
+      return Promise.delay(2000)
+        // there's no way to await completion of the build, so we just delay for a while
+      .then(() => {
+        // initialize after config builds have taken place
+        clearOutputData(output, Object.keys(configRefs[entry]))
+        return clientjs.bundle(entry, output)
+      })
     })
 
     it('should create bundle one', () => {
       compareReferenceData(configRefs[entry], output)
-    })
-
-    it('should provide asset routes', (done)=> {
-      router.staticRoute.calledWith('/assets/clientjs/test/apps').should.be.true
-      done()
     })
   })
 
@@ -203,7 +212,7 @@ describe('ClientJS', () => {
       return clientjs.readyToBuild // await completion of build (so we can check results)
     })
 
-    it('should call templater and render', ()=> {
+    it('should call templater.on() and router.staticRoute()', ()=> {
       templater.on.calledWith('renderContext.my-template').should.be.true
       router.staticRoute.calledWith('/assets/clientjs/my-template').should.be.true
     })
@@ -217,20 +226,24 @@ describe('ClientJS', () => {
     let entry = Object.keys(componentEntries)[0],
         output = componentEntries[entry]
 
+    const config = {
+      reincludeComponentScripts: {
+        'polymer/polymer.html': '/js-deps/polymer/polymer.html' } }
+
     before(() => {
       templater.on.reset()
       clearOutputData(output, Object.keys(componentRefs[entry]))
-      clientjs = makeClientJS()
+      clientjs = makeClientJS(config)
       clientjs.includeComponent('my-template', entry)
       emitLifecycleEvent('launch')
       return clientjs.readyToBuild // await completion of build (so we can check results)
     })
 
-    it('should call templater and render', ()=> {
+    it('should call templater.on()', ()=> {
       templater.on.calledWith('renderContext.my-template').should.be.true
     })
 
-    it('should create bundle one', () => {
+    it('should create transformed component', () => {
       compareReferenceData(componentRefs[entry], output)
     })
   })
