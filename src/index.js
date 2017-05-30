@@ -128,8 +128,8 @@ class ClientJS extends NxusModule {
   }
 
   _fromConfigBundles(app) {
-    for (var entry in this.config.entries) {
-      var output = this.config.entries[entry]
+    for (let entry in this.config.entries) {
+      let output = this.config.entries[entry]
       app.once('launch', () => {
         this.bundle(entry, output)
       })
