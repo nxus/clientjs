@@ -7,7 +7,7 @@
     "preversion": "npm test",
     "postversion": "npm run build-docs && git push && git push --tags",
     "test": "NODE_ENV=test mocha --compilers js:babel-register -R spec src/test",
-    "compile": "babel src --out-dir lib",
+    "compile": "babel src --ignore src/test --out-dir lib",
     "prepublish": "npm run compile",
     "postpublish": "npm run build-docs && npm run publish-docs",
     "build-docs": "export NAME=`npm view . name`; export VERSION=`npm view . version`; documentation readme ./src/index.js --name $NAME --project-version $VERSION --readme-file ./README.md -s $NAME",
