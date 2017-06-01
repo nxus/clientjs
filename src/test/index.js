@@ -29,7 +29,7 @@ const scriptEntries = {
   'src/test/apps/one.js': 'my-template/one.js' // (in .tmp/clientjs/)
 }
 const componentEntries = {
-  'src/test/apps/three.html': 'my-template-three.html' // (in .tmp/clientjs/)
+  'src/test/apps/component-one.html': 'my-template-component-one.html' // (in .tmp/clientjs/)
 }
 
 
@@ -249,4 +249,23 @@ describe('ClientJS', function () {
       compareReferenceData(componentRefs[entry], output)
     })
   })
+
+  describe('Include Invalid Component', () => {
+    let entry = 'src/test/apps/component-invalid.html',
+        output = 'my-template-component-invalid.html'
+
+    before(() => {
+      clientjs = makeClientJS({})
+      clientjs.includeComponent('my-template', entry)
+      emitLifecycleEvent('launch')
+      return clientjs.readyToBuild // await completion of build (so we can check results)
+    })
+
+    it('should not create transformed component', () => {
+      let p = path.posix.resolve('.tmp/clientjs', output)
+      expect(fs.existsSync(p)).to.be.false
+    })
+  })
+
+
 })

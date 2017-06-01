@@ -12,7 +12,8 @@ import morph from 'morph'
 import Vulcanize from 'vulcanize'
 import crisper from 'crisper'
 import * as babel from 'babel-core'
-import dom5, { predicates } from 'dom5'
+import * as parse5 from 'parse5'
+import * as dom5 from 'dom5'
 
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
@@ -250,11 +251,12 @@ class ClientJS extends NxusModule {
               xfm = babel.transform(out.js, babelOptions)
                 // {code, map, ast}
 
-          let dom = dom5.parse(out.html),
-              script = dom5.query(dom, predicates.AND(predicates.hasTagName('script'), predicates.hasAttrValue('src', jsFileName)))
+          let dom = parse5.parse(out.html),
+              script = dom5.query(dom, dom5.predicates.AND(
+                dom5.predicates.hasTagName('script'), dom5.predicates.hasAttrValue('src', jsFileName)))
           dom5.removeAttribute(script, 'src')
           dom5.setTextContent(script, '\n' + xfm.code.trim() + '\n')
-          let merged = dom5.serialize(dom)
+          let merged = parse5.serialize(dom)
 
           resolve(fs.writeFile(outputFile, merged))
         }

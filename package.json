@@ -41,6 +41,7 @@
     "nxus-core": "^4.0.0-3",
     "nxus-router": "^4.0.0-0",
     "nxus-templater": "^4.0.0-0",
+    "parse5": "^3.0.2",
     "rc": "^1.1.6",
     "traverse": "^0.6.6",
     "underscore": "^1.8.3",
