@@ -25,4 +25,27 @@
   </template>
 
   </dom-module>
-<script src="my-template-three.html.js"></script></body></html>
+<script>
+"use strict";
+
+Polymer({
+  is: 'icon-toggle',
+  properties: {
+    pressed: {
+      type: Boolean,
+      notify: true,
+      reflectToAttribute: true,
+      value: false
+    },
+    toggleIcon: {
+      type: String
+    }
+  },
+  listeners: {
+    "tap": "toggle"
+  },
+  toggle: function toggle() {
+    this.pressed = !this.pressed;
+  }
+});
+</script></body></html>

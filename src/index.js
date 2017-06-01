@@ -5,11 +5,14 @@ import browserify from 'browserify'
 import babelify from 'babelify'
 import watchify from 'watchify'
 import path from 'path'
-import child_process_ from 'child_process'
-let child_process = Promise.promisifyAll(child_process_)
 import fs from 'fs-extra'
 import _ from 'underscore'
 import morph from 'morph'
+
+import Vulcanize from 'vulcanize'
+import crisper from 'crisper'
+import * as babel from 'babel-core'
+import dom5, { predicates } from 'dom5'
 
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
@@ -179,7 +182,6 @@ class ClientJS extends NxusModule {
     let scriptName = path.basename(script)
     let outputPath = morph.toDashed(templateName) + "-" + scriptName
     let outputHTML = path.join(this.config.routePrefix,outputPath)
-    let outputJS = outputHTML+".js"
 
     let imports = []
     for (let s in this.config.reincludeComponentScripts) {
@@ -215,44 +217,54 @@ class ClientJS extends NxusModule {
     }
 
     if (this._componentCache[entry]) {
-      let [p, h, j] = this._componentCache[entry]
-      return p.then(() => {
+      let [promise, html] = this._componentCache[entry]
+      return promise.then(() => {
         try {
           let fstat = fs.lstatSync(outputFile)
           if (fstat.isSymbolicLink() || fstat.isFile())
             fs.unlinkSync(outputFile)
         } catch (e) {}
-        try {
-        let jstat = fs.lstatSync(outputJS)
-        if (jstat.isSymbolicLink() || jstat.isFile())
-          fs.unlinkSync(outputJS)
-        } catch (e) {}
-        fs.copySync(h, outputFile)
-        fs.copySync(j, outputJS)
+        fs.copySync(html, outputFile)
       })
     }
 
-    let exclude = ""
-    for (let s in this.config.reincludeComponentScripts) {
-      exclude += " --strip-exclude " + s
-    }
-    
-    let cmd = "vulcanize" + exclude + " --inline-script --inline-html " + entry
-    cmd += " | crisper --script-in-head false --html " + outputFile + " --js " + outputJS
-    this.log.debug("Componentizing:", cmd)
-    let promise = child_process.execAsync(cmd).then((error, stdout, stderr) => {
-      if (error) this.log.error("Componentize Error", error)
-      if (stderr) this.log.error("Componentize Error", stderr)
-      return child_process.execAsync("babel -o " + outputJS + " " + outputJS)
-        .then((error, stdout, stderr) => {
-          if (error) this.log.error("Babel Error", error)
-          if (stderr) this.log.error("Babel Error", stderr)
-          this.log.debug("Done with component", outputFile)
-        })
-    }).catch((e) => {
-      this.log.error("Componentize Error", e)
+    this.log.debug(`Componentizing: ${entry}, output-html '${outputFile}'`)
+
+    const vulcanize = new Vulcanize({ // see https://www.npmjs.com/package/vulcanize
+      stripExcludes: Object.keys(this.config.reincludeComponentScripts),
+      inlineScripts: true
     })
-    this._componentCache[entry] = [promise, outputFile, outputJS]
+
+    let babelOptions = Object.assign({babelrc: false}, this.config.babel)
+
+    let promise = new Promise((resolve, reject) => {
+      vulcanize.process(entry,
+        (err, html) => {
+          if (err) { reject(err); return }
+
+          let jsFileName = path.basename(outputFile) + '.js',
+              out = crisper({ // see https://github.com/PolymerLabs/crisper
+                source: html,
+                scriptInHead: false,
+                jsFileName: jsFileName }),
+              xfm = babel.transform(out.js, babelOptions)
+                // {code, map, ast}
+
+          let dom = dom5.parse(out.html),
+              script = dom5.query(dom, predicates.AND(predicates.hasTagName('script'), predicates.hasAttrValue('src', jsFileName)))
+          dom5.removeAttribute(script, 'src')
+          dom5.setTextContent(script, '\n' + xfm.code.trim() + '\n')
+          let merged = dom5.serialize(dom)
+
+          resolve(fs.writeFile(outputFile, merged))
+        }
+      )
+    })
+    .catch((err) => {
+      this.log.error("Componentize Error", err)
+    })
+
+    this._componentCache[entry] = [promise, outputFile]
     return promise
   }
   
@@ -312,6 +324,109 @@ class ClientJS extends NxusModule {
     //b.on('update', bundle)
     return bundle()
   }
+
+  /** Failed attempt to use polymer-build to bundle Polymer component.
+   * (Left in place for now in case polymer-build eventually gets its
+   * act together, and we want to try again to use it. I spent enough
+   * futile effort on it that I hate to just throw it away.)
+   *
+   * Needs:
+   *   import {PolymerProject, HtmlSplitter} from 'polymer-build'
+   *   import vfs from 'vinyl-fs'
+   *   import babel from 'gulp-babel'
+   *   import through2 from 'through2'
+   *   import ternaryStream from 'ternary-stream'
+   *   import mergeStream from 'merge-stream'
+   *
+   * @private
+   */
+  _pipelineComponentize(entry, outputPath) {
+
+    /* Code to handle scripts that are to be excluded from bundling.
+      The `matchExcludedScript()` function identifies excluded scripts,
+      and `excludeTransform()` is a transform stream that keeps track
+      of scripts to be excluded. */
+    let excludeScripts = Object.keys(this.config.reincludeComponentScripts),
+        rootPath = path.dirname(path.resolve(entry)),
+        excludedScripts = [],
+        excludedURLs = []
+    const matchExcludedScript = (data) => {
+          for (let script of excludeScripts)
+            if (data.path.endsWith(script)) return script
+        }
+    const excludeTransform = through2.obj((data, enc, callback) => {
+          let script = matchExcludedScript(data)
+          if (script) {
+            let url = path.relative(rootPath, data.path)
+            excludedScripts.push(script)
+            excludedURLs.push(url)
+            // TO DO: is there some way to safely zero-out content?
+          }
+          callback(null, data)
+        })
+
+    /* Note: Error emitted by babel seems to have these properties:
+        // console.log(err.fileName + ( err.loc ? `( ${err.loc.line}, ${err.loc.column} ): ` : ': '));
+        // console.log('error Babel: ' + err.message + '\n');
+        // console.log(err.codeFrame);
+     */
+    const babelTransform = ternaryStream(
+          data => (data.extname === '.js') && !matchExcludedScript(data),
+          babel(this.config.babel))
+
+    /* Hack around inability to set project root in PolymerProject.
+      (However, doing this early in the pipeline seems to confuse the
+      Polymer build code.) */
+    const baseTransform = through2.obj((data, enc, callback) => {
+          if (data.path.startsWith(root)) data.base = root
+          callback(null, data)
+        })
+
+    const makeTrace = (id) => {
+      let self = this
+      return through2.obj((data, enc, callback) => {
+        self.log.debug(`${id}: ${data.relative}`)
+        callback(null, data)
+      })
+    }
+
+    let root = path.resolve(path.dirname(entry)),
+        entrypoint = path.basename(entry),
+        project = new PolymerProject({
+          root,
+          entrypoint,
+          sources: [ ], // suppress default
+          extraDependencies: [ ]
+        }),
+        sourceHtmlSplitter = new HtmlSplitter(),
+        dependencyHtmlSplitter = new HtmlSplitter()
+
+    let promise = new Promise((resolve, reject) => {
+      function errorHandler(err) { reject(err); this.emit('end') }
+
+      let sourceStream = project.sources().on('error', errorHandler)
+            // .pipe(baseTransform)
+            .pipe(sourceHtmlSplitter.split()).on('error', errorHandler)
+            .pipe(babelTransform).on('error', errorHandler)
+            .pipe(sourceHtmlSplitter.rejoin()),
+          dependencyStream = project.dependencies().on('error', errorHandler)
+            .pipe(excludeTransform)
+            // .pipe(baseTransform)
+            .pipe(dependencyHtmlSplitter.split()).on('error', errorHandler)
+            .pipe(babelTransform).on('error', errorHandler)
+            .pipe(dependencyHtmlSplitter.rejoin())
+
+      mergeStream(sourceStream, dependencyStream)
+        .pipe(project.bundler({excludes: excludedURLs}))
+        .pipe(vfs.dest(outputPath, { cwd: root }))
+        .on('end', resolve)
+    }).catch((err) => {
+      this.log.error("Componentize Error", err)
+    })
+
+    return promise
+  }
+
 }
 
 

@@ -97,7 +97,7 @@ function compareReferenceData(refs, out) {
 describe('ClientJS', function () {
   var configRefs = loadReferenceData(configEntries, 'src/test/data/bundle/', [ '.js', '.js.map' ]),
       scriptRefs = loadReferenceData(scriptEntries, 'src/test/data/script/', [ '.js', '.js.map' ]),
-      componentRefs = loadReferenceData(componentEntries, 'src/test/data/component/', [ '.html', '.html.js' ]),
+      componentRefs = loadReferenceData(componentEntries, 'src/test/data/component/', [ '.html' ]),
       clientjs
 
   this.timeout(5000)

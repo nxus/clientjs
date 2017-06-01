@@ -29,10 +29,12 @@
   },
   "homepage": "https://github.com/nxus/clientjs",
   "dependencies": {
+    "babel-core": "^6.24.1",
     "babelify": "^7.3.0",
     "bluebird": "^3.0.6",
     "browserify": "^12.0.1",
     "crisper": "^2.0.2",
+    "dom5": "^2.3.0",
     "fs-extra": "^0.30.0",
     "minifyify": "^7.3.3",
     "morph": "^0.2.0",
