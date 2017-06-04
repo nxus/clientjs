@@ -145,13 +145,8 @@ class ClientJS extends NxusModule {
   }
 
   _buildingWhenReady() {
-    if (this.config.buildNone) {
-      return
-    }
-    let op = Promise.map
-    if (this.config.buildSeries) {
-      op = Promise.mapSeries
-    }
+    if (this.config.buildNone) return
+    let op = this.config.buildSeries ? Promise.mapSeries : Promise.map
     return op(this._builders, (x) => {return x()})
   }
 
