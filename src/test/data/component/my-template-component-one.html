@@ -1,0 +1,51 @@
+<!-- from https://github.com/googlecodelabs/polymer-first-elements/blob/master/icon-toggle-finished/icon-toggle.html --><html><head><meta charset="UTF-8"><!-- link rel="import" href="../iron-icon/iron-icon.html" -->
+
+</head><body><dom-module id="icon-toggle">
+
+
+  <template>
+
+    <style>
+      :host {
+        display: inline-block;
+      }
+      iron-icon {
+        fill: var(--icon-toggle-color, rgba(0,0,0,0));
+        stroke: var(--icon-toggle-outline-color, currentcolor);
+      }
+      :host([pressed]) iron-icon {
+        fill: var(--icon-toggle-pressed-color, currentcolor);
+      }    
+    </style>
+    
+    <!-- local DOM goes here -->
+    <iron-icon icon="[[toggleIcon]]">
+    </iron-icon>
+
+  </template>
+
+  </dom-module>
+<script>
+"use strict";
+
+Polymer({
+  is: 'icon-toggle',
+  properties: {
+    pressed: {
+      type: Boolean,
+      notify: true,
+      reflectToAttribute: true,
+      value: false
+    },
+    toggleIcon: {
+      type: String
+    }
+  },
+  listeners: {
+    "tap": "toggle"
+  },
+  toggle: function toggle() {
+    this.pressed = !this.pressed;
+  }
+});
+</script></body></html>

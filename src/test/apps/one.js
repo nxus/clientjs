@@ -2,4 +2,6 @@ import two from './two'
 
 let test = 'one';
 
-module.exports = 1;
+export default function (n) {
+    return n * two(n);
+};
