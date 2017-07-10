@@ -101,7 +101,6 @@ class ClientJS extends NxusModule {
       this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
     this._fromConfigBundles(app)
 
-
     this._builders = []
     this.readyToBuild = new Promise((resolve, reject) => {
       app.on('launch', () => {
@@ -111,10 +110,8 @@ class ClientJS extends NxusModule {
     if (this.config.buildOnly) {
       this.readyToBuild.then(::app.stop).then(::process.exit)
     } else {
-      this._outputPaths[this.config.assetFolder] = true
-      router.staticRoute(this.config.routePrefix, this.config.assetFolder)
+      this._establishRoute(this.config.routePrefix, this.config.assetFolder)
     }
-    
   }
 
   _defaultConfig() {
@@ -197,6 +194,14 @@ class ClientJS extends NxusModule {
     })
   }
 
+  _establishRoute(route, path) {
+    fs.ensureDirSync(path) //create directory if it doesn't exist
+    if (!(path in this._outputPaths)) {
+      this._outputPaths[path] = true
+      router.staticRoute(route, path)
+    }
+  }
+
   _componentize(entry, outputHTML) {
     let outputHTMLDir = path.dirname(outputHTML)
     if (outputHTMLDir == '.') {
@@ -205,21 +210,18 @@ class ClientJS extends NxusModule {
     var outputRoute = this.config.routePrefix+outputHTMLDir
     var outputPath = path.resolve(path.join(this.config.assetFolder, outputHTMLDir))
     var outputFile = path.join(outputPath, path.basename(outputHTML))
-    let outputJS = outputFile+".js"
 
-    if (!(outputPath in this._outputPaths)) {
-      this._outputPaths[outputPath] = true
-      router.staticRoute(outputRoute, outputPath)
-    }
+    this._establishRoute(outputRoute, outputPath)
 
     if (this._componentCache[entry]) {
       let [promise, html] = this._componentCache[entry]
       return promise.then(() => {
         try {
           let fstat = fs.lstatSync(outputFile)
-          if (fstat.isSymbolicLink() || fstat.isFile())
-            fs.unlinkSync(outputFile)
-        } catch (e) {}
+          if (fstat.isSymbolicLink()) fs.unlinkSync(outputFile)
+        } catch (e) {
+          if (e.code !== 'ENOENT') throw e
+        }
         fs.copySync(html, outputFile)
       })
     }
@@ -252,8 +254,8 @@ class ClientJS extends NxusModule {
           dom5.removeAttribute(script, 'src')
           dom5.setTextContent(script, '\n' + xfm.code.trim() + '\n')
           let merged = parse5.serialize(dom)
-
-          resolve(fs.writeFile(outputFile, merged))
+          fs.writeFileSync(outputFile, merged)
+          resolve()
         }
       )
     })
@@ -280,12 +282,7 @@ class ClientJS extends NxusModule {
     var outputMap = this.config.assetFolder+output+'.map'
     var outputMapUrl = outputRoute+'/'+path.basename(output)+'.map'
 
-    fs.mkdirsSync(outputPath) //create the local folder for output if it doesn't exist
-    
-    if (!(outputPath in this._outputPaths)) {
-      this._outputPaths[outputPath] = true
-      router.staticRoute(outputRoute, outputPath)
-    }
+    this._establishRoute(outputRoute, outputPath)
     
     var options = {
       entries: [entry],
