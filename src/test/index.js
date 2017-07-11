@@ -14,12 +14,6 @@ import {application as app} from 'nxus-core'
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
 
-import chai from 'chai'
-import chaiAsPromised from 'chai-as-promised'
-chai.use(chaiAsPromised)
-let should = chai.should(),
-    expect = chai.expect
-
 const configBabel = { presets: [ 'es2015' ] }
 const configEntries = {
   'src/test/apps/one.js': 'test/apps/one-bundled.js', // (in .tmp/clientjs/)
@@ -29,7 +23,7 @@ const scriptEntries = {
   'src/test/apps/one.js': 'my-template/one.js' // (in .tmp/clientjs/)
 }
 const componentEntries = {
-  'src/test/apps/component-one.html': 'my-template-component-one.html' // (in .tmp/clientjs/)
+  'src/test/apps/component-one.html': 'component-one.html' // (in .tmp/clientjs/)
 }
 
 
@@ -226,7 +220,8 @@ describe('ClientJS', function () {
 
   describe('Include Component', () => {
     let entry = Object.keys(componentEntries)[0],
-        output = componentEntries[entry]
+        templates = [ 'my-template1', 'my-template2' ],
+        outputs = templates.map(t => `${t}-${componentEntries[entry]}`)
 
     const config = {
       reincludeComponentScripts: {
@@ -234,19 +229,23 @@ describe('ClientJS', function () {
 
     before(() => {
       templater.on.reset()
-      clearOutputData(output, Object.keys(componentRefs[entry]))
+      for (let output of outputs)
+        clearOutputData(output, Object.keys(componentRefs[entry]))
       clientjs = makeClientJS(config)
-      clientjs.includeComponent('my-template', entry)
+      for (let template of templates)
+        clientjs.includeComponent(template, entry)
       emitLifecycleEvent('launch')
       return clientjs.readyToBuild // await completion of build (so we can check results)
     })
 
     it('should call templater.on()', ()=> {
-      templater.on.calledWith('renderContext.my-template').should.be.true
+      for (let template of templates)
+        templater.on.calledWith(`renderContext.${template}`).should.be.true
     })
 
     it('should create transformed component', () => {
-      compareReferenceData(componentRefs[entry], output)
+      for (let output of outputs)
+        compareReferenceData(componentRefs[entry], output)
     })
   })
 
