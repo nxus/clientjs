@@ -1,9 +1,7 @@
 'use strict'
 
 import Promise from 'bluebird'
-import browserify from 'browserify'
-import babelify from 'babelify'
-import watchify from 'watchify'
+import webpack from 'webpack'
 import path from 'path'
 import fs from 'fs-extra'
 import _ from 'underscore'
@@ -279,39 +277,51 @@ class ClientJS extends NxusModule {
     var outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
     var outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
     var outputFile = this.config.assetFolder+output
+    var outputFilename = path.basename(outputFile)
     var outputMap = this.config.assetFolder+output+'.map'
-    var outputMapUrl = outputRoute+'/'+path.basename(output)+'.map'
+    var outputMapUrl = outputRoute+'/'+outputFilename+'.map'
 
     this._establishRoute(outputRoute, outputPath)
     
     var options = {
-      entries: [entry],
-      cache: {},
-      packageCache: {},
-      debug: true
-    }
-    if (this.config.watchify) {
-      options.plugin = [watchify]
-    }
-    let b = browserify(options)
-      .transform(babelify.configure(this.config.babel))
-      .plugin('minifyify', {map: outputMapUrl, output: outputMap})
+      entry: entry,
+      output: {
+        filename: outputFilename,
+        path: outputPath,
+        sourceMapFilename: outputFilename+'.map'
+      },
+      watch: this.config.watchify,
+      module: {
+        rules: [
+          {
+            test: /\.js$/,
+            exclude: /(node_modules|bower_components)/,
+            use: {
+              loader: 'babel-loader',
+              options: this.config.babel
+            }
+          }
+        ]
+      }
+    }          
+
     let bundle = () => {
       return new Promise((resolve, reject) => {
-        b.bundle((err, buf) => {
+        webpack(options, (err, stats) => {
           if (err) {
-            this.log.error(`Browserify bundle error for ${entry}`, err)
+            this.log.error(`Webpack bundle error for ${entry}`, err)
             reject(err)
             return
           }
-          fs.writeFileSync(outputFile, buf)
-          this.log.debug(`Browserify bundle for ${entry}, ${buf.byteLength} bytes written`)
+          this.log.debug(`Webpack bundle for ${entry} written`)
+          let info = stats.toJson()
+          if (stats.hasErrors()) {
+            this.log.error(`Webpack errors for ${entry}: ${info.errors}`)
+          }
+          if (stats.hasWarnings()) {
+            this.log.error(`Webpack warnings for ${entry}: ${info.warnings}`)
+          }
           resolve()
-        })
-        .on('error', (err) => {
-          // browserify pipeline errors aren't delivered to completion handler; have to catch them here
-          this.log.error(`Browserify bundle error event for ${entry}`, err.toString())
-          reject(err)
         })
       })
     }
