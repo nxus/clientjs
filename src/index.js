@@ -291,6 +291,14 @@ class ClientJS extends NxusModule {
         sourceMapFilename: outputFilename+'.map'
       },
       watch: this.config.watchify,
+      plugins: [
+        new webpack.optimize.UglifyJsPlugin({
+          compress: {
+            warnings: false,
+            drop_console: false,
+          }
+        })
+      ],
       module: {
         rules: [
           {
