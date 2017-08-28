@@ -173,17 +173,19 @@ class ClientJS extends NxusModule {
   includeComponent(templateName, script) {
     let scriptName = path.basename(script)
     let outputPath = morph.toDashed(templateName) + "-" + scriptName
-    let outputHTML = path.join(this.config.routePrefix,outputPath)
+    let outputJS = path.join(this.config.routePrefix,outputPath)
 
     let imports = []
     for (let s in this.config.reincludeComponentScripts) {
       imports.push(this.config.reincludeComponentScripts[s])
     }
-    imports.push(outputHTML)
 
     templater.on('renderContext.'+templateName, () => {
       return {
-        headScripts: [this.config.webcomponentsURL],
+        headScripts: [
+          this.config.webcomponentsURL,
+          outputJS
+        ],
         imports
       }
     })
@@ -201,19 +203,20 @@ class ClientJS extends NxusModule {
     }
   }
 
-  _componentize(entry, outputHTML) {
-    let outputHTMLDir = path.dirname(outputHTML)
-    if (outputHTMLDir == '.') {
-      outputHTMLDir = ''
+  _componentize(entry, output) {
+    let outputDir = path.dirname(output)
+    if (outputDir == '.') {
+      outputDir = ''
     }
-    var outputRoute = this.config.routePrefix+outputHTMLDir
-    var outputPath = path.resolve(path.join(this.config.assetFolder, outputHTMLDir))
-    var outputFile = path.join(outputPath, path.basename(outputHTML))
+    var outputRoute = this.config.routePrefix+outputDir
+    var outputPath = path.resolve(path.join(this.config.assetFolder, outputDir))
+    var outputFilename = path.basename(output)
+    var outputFile = path.join(outputPath, outputFilename)
 
     this._establishRoute(outputRoute, outputPath)
 
     if (this._componentCache[entry]) {
-      let [promise, html] = this._componentCache[entry]
+      let [promise, js] = this._componentCache[entry]
       return promise.then(() => {
         try {
           let fstat = fs.lstatSync(outputFile)
@@ -221,43 +224,58 @@ class ClientJS extends NxusModule {
         } catch (e) {
           if (e.code !== 'ENOENT') throw e
         }
-        fs.copySync(html, outputFile)
+        fs.copySync(js, outputFile)
       })
     }
 
-    this.log.debug(`Componentizing: ${entry}, output-html '${outputFile}'`)
+    this.log.debug(`Componentizing: ${entry}, output-js '${outputFile}'`)
 
-    const vulcanize = new Vulcanize({ // see https://www.npmjs.com/package/vulcanize
-      stripExcludes: Object.keys(this.config.reincludeComponentScripts),
-      inlineScripts: true
+    let ignoreLinks = Object.keys(this.config.reincludeComponentScripts).map((x) => {
+      return new RegExp(x+"$")
+    })
+    
+    let options = this._webpackConfig(entry, outputPath, outputFilename)
+
+    options.module.rules.unshift({
+      test: /\.html$/,
+      use: [
+        {
+              loader: 'babel-loader?presets=es2015',
+              options: this.config.babel
+        },
+        {
+          loader: 'polymer-webpack-loader',
+          options: {
+            ignoreLinks
+          }
+        }
+      ]
     })
 
-    let babelOptions = Object.assign({babelrc: false}, this.config.babel)
-
     let promise = new Promise((resolve, reject) => {
-      vulcanize.process(entry,
-        (err, html) => {
-          if (err) { reject(err); return }
-
-          let jsFileName = path.basename(outputFile) + '.js',
-              out = crisper({ // see https://github.com/PolymerLabs/crisper
-                source: html,
-                scriptInHead: false,
-                jsFileName: jsFileName }),
-              xfm = babel.transform(out.js, babelOptions)
-                // {code, map, ast}
-
-          let dom = parse5.parse(out.html),
-              script = dom5.query(dom, dom5.predicates.AND(
-                dom5.predicates.hasTagName('script'), dom5.predicates.hasAttrValue('src', jsFileName)))
-          dom5.removeAttribute(script, 'src')
-          dom5.setTextContent(script, '\n' + xfm.code.trim() + '\n')
-          let merged = parse5.serialize(dom)
-          fs.writeFileSync(outputFile, merged)
+        webpack(options, (err, stats) => {
+          if (err) {
+            this.log.error(`Component bundle error for ${entry}`, err)
+            reject(err)
+            return
+          }
           this.log.debug(`Component bundle for ${entry} written`)
+          let info = stats.toJson()
+          if (stats.hasErrors()) {
+            this.log.error(`Component errors for ${entry}: ${info.errors}`)
+            try {
+              let fstat = fs.lstatSync(outputFile)
+              if (fstat.isFile()) fs.unlinkSync(outputFile)
+            } catch (e) {
+              if (e.code !== 'ENOENT') throw e
+            }
+            reject(new Error(info.errors.toString()))
+          }
+          if (stats.hasWarnings()) {
+            this.log.error(`Component warnings for ${entry}: ${info.warnings}`)
+          }
           resolve()
-        }
-      )
+        })
     })
     .catch((err) => {
       this.log.error("Componentize Error", err)
@@ -266,24 +284,8 @@ class ClientJS extends NxusModule {
     this._componentCache[entry] = [promise, outputFile]
     return promise
   }
-  
-  /**
-   * Create a clientjs bundle that can be injected into a rendered page.
-   * @param  {[type]} entry  the source file to bundle
-   * @param  {[type]} output the output path to use in the browser to access the bundled source
-   */
-  bundle(entry, output) {
-    this.log.debug('Bundling', entry, output)
 
-    if(output && output[0] != '/') output = '/'+output //add prepending slash if not set
-    var outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
-    var outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
-    var outputFile = this.config.assetFolder+output
-    var outputFilename = path.basename(outputFile)
-    var outputMap = this.config.assetFolder+output+'.map'
-    var outputMapUrl = outputRoute+'/'+outputFilename+'.map'
-
-    this._establishRoute(outputRoute, outputPath)
+  _webpackConfig(entry, outputPath, outputFilename) {
 
     var sourceMap = this.config.sourceMap
     
@@ -318,7 +320,27 @@ class ClientJS extends NxusModule {
         ]
       }
     }          
+    return options
+  }
+  
+  /**
+   * Create a clientjs bundle that can be injected into a rendered page.
+   * @param  {[type]} entry  the source file to bundle
+   * @param  {[type]} output the output path to use in the browser to access the bundled source
+   */
+  bundle(entry, output) {
+    this.log.debug('Bundling', entry, output)
 
+    if(output && output[0] != '/') output = '/'+output //add prepending slash if not set
+    var outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
+    var outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
+    var outputFile = this.config.assetFolder+output
+    var outputFilename = path.basename(outputFile)
+
+    this._establishRoute(outputRoute, outputPath)
+
+    var options = this._webpackConfig(entry, outputPath, outputFilename)
+    
     let bundle = () => {
       return new Promise((resolve, reject) => {
         webpack(options, (err, stats) => {
