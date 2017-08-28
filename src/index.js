@@ -284,15 +284,17 @@ class ClientJS extends NxusModule {
     this._establishRoute(outputRoute, outputPath)
     
     var options = {
-      entry: entry,
+      entry: path.resolve(entry),
       output: {
         filename: outputFilename,
         path: outputPath,
         sourceMapFilename: outputFilename+'.map'
       },
+      devtool: 'source-map',
       watch: this.config.watchify,
       plugins: [
         new webpack.optimize.UglifyJsPlugin({
+          sourceMap: true,
           compress: {
             warnings: false,
             drop_console: false,
@@ -325,6 +327,13 @@ class ClientJS extends NxusModule {
           let info = stats.toJson()
           if (stats.hasErrors()) {
             this.log.error(`Webpack errors for ${entry}: ${info.errors}`)
+            try {
+              let fstat = fs.lstatSync(outputFile)
+              if (fstat.isFile()) fs.unlinkSync(outputFile)
+            } catch (e) {
+              if (e.code !== 'ENOENT') throw e
+            }
+            reject(new Error(info.errors.toString()))
           }
           if (stats.hasWarnings()) {
             this.log.error(`Webpack warnings for ${entry}: ${info.warnings}`)
