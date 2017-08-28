@@ -120,6 +120,7 @@ class ClientJS extends NxusModule {
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
       reincludeComponentScripts: {},
       entries: {},
+      sourceMap: app.config.NODE_ENV != 'production' ? 'cheap-module-eval-source-map' : 'source-map',
       buildSeries: false,
       buildOnly: false,
       buildNone: false
@@ -253,6 +254,7 @@ class ClientJS extends NxusModule {
           dom5.setTextContent(script, '\n' + xfm.code.trim() + '\n')
           let merged = parse5.serialize(dom)
           fs.writeFileSync(outputFile, merged)
+          this.log.debug(`Component bundle for ${entry} written`)
           resolve()
         }
       )
@@ -282,6 +284,8 @@ class ClientJS extends NxusModule {
     var outputMapUrl = outputRoute+'/'+outputFilename+'.map'
 
     this._establishRoute(outputRoute, outputPath)
+
+    var sourceMap = this.config.sourceMap
     
     var options = {
       entry: path.resolve(entry),
@@ -290,11 +294,11 @@ class ClientJS extends NxusModule {
         path: outputPath,
         sourceMapFilename: outputFilename+'.map'
       },
-      devtool: 'source-map',
+      devtool: sourceMap ? sourceMap : false,
       watch: this.config.watchify,
       plugins: [
         new webpack.optimize.UglifyJsPlugin({
-          sourceMap: true,
+          sourceMap,
           compress: {
             warnings: false,
             drop_console: false,

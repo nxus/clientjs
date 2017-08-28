@@ -26,13 +26,14 @@ const componentEntries = {
   'src/test/apps/component-one.html': 'component-one.html' // (in .tmp/clientjs/)
 }
 
+const defaultConfig = { babel: configBabel, sourceMap: 'source-map'}
 
 /* Create a new ClientJS instance.
  * First initialize the application `client_js` configuration, so it has
  * well-known settings for the instance.
  */
 function makeClientJS(config) {
-  app.config['client_js'] = Object.assign({ babel: configBabel}, app.config['client_js'], config)
+  app.config['client_js'] = Object.assign(defaultConfig, app.config['client_js'], config)
   // if (config) app.config['client_js'] = Object.assign({}, app.config['client_js'], config)
   return new ClientJS()
 }
