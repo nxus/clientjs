@@ -48,13 +48,11 @@ import {application as app, NxusModule} from 'nxus-core'
  *
  * ## Usage
  *
- * ClientJS currently supports bundling scripts from an entry point JS file using webpack, or Polymer web components
- * using vulcanize/crisper. Both options will serve the resulting file from a temporary location and process the
+ * ClientJS currently supports bundling scripts from a JS file entry point using webpack, or Polymer web components
+ * HTML file entry point. Both options will serve the resulting file from a temporary location and process the
  * results using babel if configured, and insert the necessary script/link tags into a selected template.
  *
  *     app.get('clientjs').includeScript('my-template', __dirname+"/js/entry.js")
- *
- *     app.get('clientjs').includeComponent('my-template', __dirname+"/components/entry.js")
  *
  *
  * ### Creating a bundle for manual inclusion in a template
@@ -113,7 +111,7 @@ class ClientJS extends NxusModule {
   constructor () {
     super()
     this._outputPaths = {}
-    this._componentCache = {}
+    this._bundleCache = {}
 
     if(_.isEmpty(this.config.babel))
       this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
@@ -178,43 +176,43 @@ class ClientJS extends NxusModule {
     let outputPath = path.join(morph.toDashed(templateName), scriptName)
     let outputUrl = path.join(this.config.routePrefix,outputPath)
 
-    templater.on('renderContext.'+templateName, () => {
-      return {scripts: [outputUrl]}
-    })
+    let imports, scripts, headScripts
 
+    if (script.slice(-4) == '.html') {
+      outputPath += ".js"
+      let imports = []
+      for (let s in this.config.reincludeComponentScripts) {
+        imports.push(this.config.reincludeComponentScripts[s])
+      }
+      headScripts = [
+        this.config.webcomponentsURL,
+        outputJS
+      ]
+    } else {
+      scripts = [outputUrl]
+    }
+
+    templater.on('renderContext.'+templateName, () => {
+      return {
+        headScripts,
+        scripts,
+        imports
+      }
+    })
+    
     this._buildWhenReady(() => {
       return this.bundle(script, outputPath)
     })
   }
 
   /**
-   * Injects the passed web component entry into to the specified template after bundling/babel
+   * @deprecated
+   * (Deprecated, includeScript now handles this.) Injects the passed web component entry into to the specified template after bundling/babel
    * @param  {String} templateName the name of the template to include the script into
    * @param  {[type]} script       the path of the component file to include
    */
   includeComponent(templateName, script) {
-    let scriptName = path.basename(script)
-    let outputPath = morph.toDashed(templateName) + "-" + scriptName + ".js"
-    let outputJS = path.join(this.config.routePrefix,outputPath)
-
-    let imports = []
-    for (let s in this.config.reincludeComponentScripts) {
-      imports.push(this.config.reincludeComponentScripts[s])
-    }
-
-    templater.on('renderContext.'+templateName, () => {
-      return {
-        headScripts: [
-          this.config.webcomponentsURL,
-          outputJS
-        ],
-        imports
-      }
-    })
-
-    this._buildWhenReady(() => {
-      return this._componentize(script, outputPath)
-    })
+    return this.includeScript(templateName, script)
   }
 
   _establishRoute(route, path) {
@@ -223,73 +221,6 @@ class ClientJS extends NxusModule {
       this._outputPaths[path] = true
       router.staticRoute(route, path)
     }
-  }
-
-  _componentize(entry, output) {
-    let outputDir = path.dirname(output)
-    if (outputDir == '.') {
-      outputDir = ''
-    }
-    var outputRoute = this.config.routePrefix+outputDir
-    var outputPath = path.resolve(path.join(this.config.assetFolder, outputDir))
-    var outputFilename = path.basename(output)
-    var outputFile = path.join(outputPath, outputFilename)
-
-    this._establishRoute(outputRoute, outputPath)
-
-    if (this._componentCache[entry]) {
-      let [promise, js] = this._componentCache[entry]
-      return promise.then(() => {
-        try {
-          let fstat = fs.lstatSync(outputFile)
-          if (fstat.isSymbolicLink()) fs.unlinkSync(outputFile)
-        } catch (e) {
-          if (e.code !== 'ENOENT') throw e
-        }
-        fs.copySync(js, outputFile)
-      })
-    }
-
-    this.log.debug(`Componentizing: ${entry}, output-js '${outputFile}'`)
-
-    
-    let options = this._webpackConfig(entry, outputPath, outputFilename)
-
-    options.module.rules.unshift()
-
-    let promise = new Promise((resolve, reject) => {
-        webpack(options, (err, stats) => {
-          if (err) {
-            this.log.error(`Component bundle error for ${entry}`, err)
-            reject(err)
-            return
-          }
-          let info = stats.toJson()
-          if (stats.hasErrors()) {
-            this.log.error(`Component errors for ${entry}: ${info.errors}`)
-            try {
-              let fstat = fs.lstatSync(outputFile)
-              if (fstat.isFile()) fs.unlinkSync(outputFile)
-            } catch (e) {
-              if (e.code !== 'ENOENT') throw e
-            }
-            reject(new Error(info.errors.toString()))
-          }
-          else if (stats.hasWarnings()) {
-            this.log.error(`Component warnings for ${entry}: ${info.warnings}`)
-          }
-          else {
-            this.log.debug(`Component bundle for ${entry} written to ${outputFile}`)
-            resolve()
-          }
-        })
-    })
-    .catch((err) => {
-      this.log.error("Componentize Error", err)
-    })
-
-    this._componentCache[entry] = [promise, outputFile]
-    return promise
   }
 
   _webpackConfig(entry, outputPath, outputFilename) {
@@ -363,7 +294,12 @@ class ClientJS extends NxusModule {
    * @param  {[type]} output the output path to use in the browser to access the bundled source
    */
   bundle(entry, output) {
-    this.log.debug('Bundling', entry, output)
+    this.log.debug('Bundling', entry, "to", output)
+    
+    let outputDir = path.dirname(output)
+    if (outputDir == '.') {
+      outputDir = ''
+    }
 
     if(output && output[0] != '/') output = '/'+output //add prepending slash if not set
     var outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
@@ -373,20 +309,31 @@ class ClientJS extends NxusModule {
 
     this._establishRoute(outputRoute, outputPath)
 
+    if (this._bundleCache[entry]) {
+      let [promise, js] = this._bundleCache[entry]
+      return promise.then(() => {
+        try {
+          let fstat = fs.lstatSync(outputFile)
+          if (fstat.isSymbolicLink()) fs.unlinkSync(outputFile)
+        } catch (e) {
+          if (e.code !== 'ENOENT') throw e
+        }
+        fs.copySync(js, outputFile)
+      })
+    }
+
     var options = this._webpackConfig(entry, outputPath, outputFilename)
     
-    let bundle = () => {
-      return new Promise((resolve, reject) => {
+    let promise = new Promise((resolve, reject) => {
         webpack(options, (err, stats) => {
           if (err) {
-            this.log.error(`Webpack bundle error for ${entry}`, err)
+            this.log.error(`Bundle error for ${entry}`, err)
             reject(err)
             return
           }
-          this.log.debug(`Webpack bundle for ${entry} written`)
           let info = stats.toJson()
           if (stats.hasErrors()) {
-            this.log.error(`Webpack errors for ${entry}: ${info.errors}`)
+            this.log.error(`Bundle errors for ${entry}: ${info.errors}`)
             try {
               let fstat = fs.lstatSync(outputFile)
               if (fstat.isFile()) fs.unlinkSync(outputFile)
@@ -394,117 +341,17 @@ class ClientJS extends NxusModule {
               if (e.code !== 'ENOENT') throw e
             }
             reject(new Error(info.errors.toString()))
+            return
           }
           if (stats.hasWarnings()) {
-            this.log.error(`Webpack warnings for ${entry}: ${info.warnings}`)
+            this.log.error(`Bundle warnings for ${entry}: ${info.warnings}`)
           }
+          this.log.debug(`Bundle for ${entry} written to ${outputFile}`)
           resolve()
         })
-      })
-    }
-    //b.on('update', bundle)
-    return bundle()
-  }
-
-  /** Failed attempt to use polymer-build to bundle Polymer component.
-   * (Left in place for now in case polymer-build eventually gets its
-   * act together, and we want to try again to use it. I spent enough
-   * futile effort on it that I hate to just throw it away.)
-   *
-   * Needs:
-   *   import {PolymerProject, HtmlSplitter} from 'polymer-build'
-   *   import vfs from 'vinyl-fs'
-   *   import babel from 'gulp-babel'
-   *   import through2 from 'through2'
-   *   import ternaryStream from 'ternary-stream'
-   *   import mergeStream from 'merge-stream'
-   *
-   * @private
-   */
-  _pipelineComponentize(entry, outputPath) {
-
-    /* Code to handle scripts that are to be excluded from bundling.
-      The `matchExcludedScript()` function identifies excluded scripts,
-      and `excludeTransform()` is a transform stream that keeps track
-      of scripts to be excluded. */
-    let excludeScripts = Object.keys(this.config.reincludeComponentScripts),
-        rootPath = path.dirname(path.resolve(entry)),
-        excludedScripts = [],
-        excludedURLs = []
-    const matchExcludedScript = (data) => {
-          for (let script of excludeScripts)
-            if (data.path.endsWith(script)) return script
-        }
-    const excludeTransform = through2.obj((data, enc, callback) => {
-          let script = matchExcludedScript(data)
-          if (script) {
-            let url = path.relative(rootPath, data.path)
-            excludedScripts.push(script)
-            excludedURLs.push(url)
-            // TO DO: is there some way to safely zero-out content?
-          }
-          callback(null, data)
-        })
-
-    /* Note: Error emitted by babel seems to have these properties:
-        // console.log(err.fileName + ( err.loc ? `( ${err.loc.line}, ${err.loc.column} ): ` : ': '));
-        // console.log('error Babel: ' + err.message + '\n');
-        // console.log(err.codeFrame);
-     */
-    const babelTransform = ternaryStream(
-          data => (data.extname === '.js') && !matchExcludedScript(data),
-          babel(this.config.babel))
-
-    /* Hack around inability to set project root in PolymerProject.
-      (However, doing this early in the pipeline seems to confuse the
-      Polymer build code.) */
-    const baseTransform = through2.obj((data, enc, callback) => {
-          if (data.path.startsWith(root)) data.base = root
-          callback(null, data)
-        })
-
-    const makeTrace = (id) => {
-      let self = this
-      return through2.obj((data, enc, callback) => {
-        self.log.debug(`${id}: ${data.relative}`)
-        callback(null, data)
-      })
-    }
-
-    let root = path.resolve(path.dirname(entry)),
-        entrypoint = path.basename(entry),
-        project = new PolymerProject({
-          root,
-          entrypoint,
-          sources: [ ], // suppress default
-          extraDependencies: [ ]
-        }),
-        sourceHtmlSplitter = new HtmlSplitter(),
-        dependencyHtmlSplitter = new HtmlSplitter()
-
-    let promise = new Promise((resolve, reject) => {
-      function errorHandler(err) { reject(err); this.emit('end') }
-
-      let sourceStream = project.sources().on('error', errorHandler)
-            // .pipe(baseTransform)
-            .pipe(sourceHtmlSplitter.split()).on('error', errorHandler)
-            .pipe(babelTransform).on('error', errorHandler)
-            .pipe(sourceHtmlSplitter.rejoin()),
-          dependencyStream = project.dependencies().on('error', errorHandler)
-            .pipe(excludeTransform)
-            // .pipe(baseTransform)
-            .pipe(dependencyHtmlSplitter.split()).on('error', errorHandler)
-            .pipe(babelTransform).on('error', errorHandler)
-            .pipe(dependencyHtmlSplitter.rejoin())
-
-      mergeStream(sourceStream, dependencyStream)
-        .pipe(project.bundler({excludes: excludedURLs}))
-        .pipe(vfs.dest(outputPath, { cwd: root }))
-        .on('end', resolve)
-    }).catch((err) => {
-      this.log.error("Componentize Error", err)
     })
 
+//    this._bundleCache[entry] = [promise, outputFile]
     return promise
   }
 
