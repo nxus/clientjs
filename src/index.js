@@ -35,6 +35,8 @@ import {application as app, NxusModule} from 'nxus-core'
  *       'client_js': {
  *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file options
  *         'watchify': true, // Whether to have webpack watch for changes - add your js to .nxusrc 'ignore' if so
+ *         'minify': true, // Whether to have webpack minify output
+ *         'webpackConfig': {}, // Additional webpack config, merged with default.
  *         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
  *         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
  *         'webcomponentsURL': 'js/wc-min.js', // URL to include for WC polyfill
@@ -133,6 +135,8 @@ class ClientJS extends NxusModule {
   _defaultConfig() {
     return {     
       watchify: true,
+      minify: true,
+      webpackConfig: {},
       routePrefix: '/assets/clientjs',
       assetFolder: '.tmp/clientjs',
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
@@ -190,7 +194,7 @@ class ClientJS extends NxusModule {
    */
   includeComponent(templateName, script) {
     let scriptName = path.basename(script)
-    let outputPath = morph.toDashed(templateName) + "-" + scriptName
+    let outputPath = morph.toDashed(templateName) + "-" + scriptName + ".js"
     let outputJS = path.join(this.config.routePrefix,outputPath)
 
     let imports = []
@@ -248,27 +252,10 @@ class ClientJS extends NxusModule {
 
     this.log.debug(`Componentizing: ${entry}, output-js '${outputFile}'`)
 
-    let ignoreLinks = Object.keys(this.config.reincludeComponentScripts).map((x) => {
-      return new RegExp(x+"$")
-    })
     
     let options = this._webpackConfig(entry, outputPath, outputFilename)
 
-    options.module.rules.unshift({
-      test: /\.html$/,
-      use: [
-        {
-              loader: 'babel-loader?presets=es2015',
-              options: this.config.babel
-        },
-        {
-          loader: 'polymer-webpack-loader',
-          options: {
-            ignoreLinks
-          }
-        }
-      ]
-    })
+    options.module.rules.unshift()
 
     let promise = new Promise((resolve, reject) => {
         webpack(options, (err, stats) => {
@@ -277,7 +264,6 @@ class ClientJS extends NxusModule {
             reject(err)
             return
           }
-          this.log.debug(`Component bundle for ${entry} written`)
           let info = stats.toJson()
           if (stats.hasErrors()) {
             this.log.error(`Component errors for ${entry}: ${info.errors}`)
@@ -289,10 +275,13 @@ class ClientJS extends NxusModule {
             }
             reject(new Error(info.errors.toString()))
           }
-          if (stats.hasWarnings()) {
+          else if (stats.hasWarnings()) {
             this.log.error(`Component warnings for ${entry}: ${info.warnings}`)
           }
-          resolve()
+          else {
+            this.log.debug(`Component bundle for ${entry} written to ${outputFile}`)
+            resolve()
+          }
         })
     })
     .catch((err) => {
@@ -307,6 +296,10 @@ class ClientJS extends NxusModule {
 
     var sourceMap = this.config.sourceMap
     
+    let ignoreLinks = Object.keys(this.config.reincludeComponentScripts).map((x) => {
+      return new RegExp(x+"$")
+    })
+    
     var options = {
       entry: path.resolve(entry),
       output: {
@@ -316,17 +309,26 @@ class ClientJS extends NxusModule {
       },
       devtool: sourceMap ? sourceMap : false,
       watch: this.config.watchify,
-      plugins: [
-        new webpack.optimize.UglifyJsPlugin({
-          sourceMap,
-          compress: {
-            warnings: false,
-            drop_console: false,
-          }
-        })
-      ],
       module: {
         rules: [
+          {
+            test: /\.html$/,
+            use: [
+              {
+                loader: 'babel-loader',
+                options: this.config.babel
+              },
+              {
+                loader: 'polymer-webpack-loader',
+                options: {
+                  ignoreLinks,
+                  htmlLoader: {
+                    minimize: false
+                  }
+                }
+              }
+            ]
+          },
           {
             test: /\.js$/,
             exclude: /(node_modules|bower_components)/,
@@ -337,7 +339,21 @@ class ClientJS extends NxusModule {
           }
         ]
       }
-    }          
+    }
+    if (this.config.minify) {
+      options.plugins = [
+        new webpack.optimize.UglifyJsPlugin({
+          sourceMap,
+          compress: {
+            warnings: false,
+            drop_console: false,
+          }
+        })
+      ]
+    }
+    if (this.config.webpackConfig) {
+      options = Object.assign(options, this.config.webpackConfig)
+    }
     return options
   }
   
