@@ -32,7 +32,6 @@
     "babel-core": "^6.24.1",
     "babel-loader": "^7.1.2",
     "babel-preset-env": "^1.6.0",
-    "babelify": "^7.3.0",
     "bluebird": "^3.0.6",
     "crisper": "^2.0.2",
     "dom5": "^2.3.0",
@@ -47,7 +46,6 @@
     "traverse": "^0.6.6",
     "underscore": "^1.8.3",
     "vulcanize": "^1.14.8",
-    "watchify": "^3.6.1",
     "webpack": "^3.5.5"
   },
   "devDependencies": {
