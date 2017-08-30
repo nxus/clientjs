@@ -22,7 +22,8 @@ import {application as app, NxusModule} from 'nxus-core'
  *
  * [![Build Status](https://travis-ci.org/nxus/clientjs.svg?branch=master)](https://travis-ci.org/nxus/clientjs)
  * 
- * Compacts, processes and bundles code for inclusion in the browser.  Uses browserify and babel to process source files, and makes
+ * 
+ * Compacts, processes and bundles code for inclusion in the browser.  Uses webpack and babel to process source files, and makes
  * the processed file available via a static route.
  *
  * ## Installation
@@ -32,22 +33,39 @@ import {application as app, NxusModule} from 'nxus-core'
  * ## Configuration Options
  * 
  *       'client_js': {
- *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file
+ *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file options
+ *         'watchify': true, // Whether to have webpack watch for changes - add your js to .nxusrc 'ignore' if so
  *         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
  *         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
  *         'webcomponentsURL': 'js/wc-min.js', // URL to include for WC polyfill
- *         'reincludeComponentScripts': {} // components to ignore from babel compilation but include in scripts
+ *         'reincludeComponentScripts': {}, // components to ignore from babel compilation but include in scripts
+ *         'buildNone': false, // For production, to skip any bundling if pre-building during deploy
+ *         'buildOnly': false, // For building during deploy scripts
+ *         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts 
  *       }
  *
  * ## Usage
  *
- * To use the module, there are two steps: 1) create the bundle, and 2) include/inject the source into your page.
+ * ClientJS currently supports bundling scripts from an entry point JS file using webpack, or Polymer web components
+ * using vulcanize/crisper. Both options will serve the resulting file from a temporary location and process the
+ * results using babel if configured, and insert the necessary script/link tags into a selected template.
  *
- * ### Creating the bundle
+ *     app.get('clientjs').includeScript('my-template', __dirname+"/js/entry.js")
  *
- *     app.get('clientjs').bundle('/my/local/file.js', '/browser/path/to/file.js')
+ *     app.get('clientjs').includeComponent('my-template', __dirname+"/components/entry.js")
  *
- * ### Include/inject the source file
+ *
+ * ### Creating a bundle for manual inclusion in a template
+ *
+ * These are the low-level steps that `includeScript` performs:
+ *
+ *     app.get('clientjs').bundle('/my/local/file.js', '/path/to/serve/file.js')
+ *
+ * Serve the bundled path using `router.staticRoute`:
+ *
+ *     app.get('router').staticRoute('/browser/path/to', '/path/to/serve')
+ *
+ * Then include/inject the source file:
  *
  * You can either include the output path as specified when you creatd the bundle
  *
@@ -147,7 +165,7 @@ class ClientJS extends NxusModule {
   }
 
   /**
-   * Injects the passed script into to the specified template
+   * Injects the passed script entry into to the specified template after webpack/babel
    * @param  {String} templateName the name of the template to include the script into
    * @param  {[type]} script       the path of the script file to include
    */
@@ -166,7 +184,7 @@ class ClientJS extends NxusModule {
   }
 
   /**
-   * Injects the passed web component into to the specified template
+   * Injects the passed web component entry into to the specified template after bundling/babel
    * @param  {String} templateName the name of the template to include the script into
    * @param  {[type]} script       the path of the component file to include
    */
