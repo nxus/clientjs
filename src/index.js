@@ -178,16 +178,16 @@ class ClientJS extends NxusModule {
 
     let imports, scripts, headScripts
 
-    if (script.slice(-4) == '.html') {
+    if (script.slice(-4) == 'html') {
       outputPath += ".js"
-      let imports = []
+      imports = []
       for (let s in this.config.reincludeComponentScripts) {
         imports.push(this.config.reincludeComponentScripts[s])
       }
       headScripts = [
         this.config.webcomponentsURL,
-        outputJS
       ]
+      scripts = [outputUrl]
     } else {
       scripts = [outputUrl]
     }
