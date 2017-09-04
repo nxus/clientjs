@@ -257,9 +257,12 @@ describe('ClientJS', function () {
 
     before(() => {
       clientjs = makeClientJS({})
+    })
+    
+    it('should reject with error', () => {
       clientjs.includeComponent('my-template', entry)
       emitLifecycleEvent('launch')
-      return clientjs.readyToBuild // await completion of build (so we can check results)
+      return clientjs.readyToBuild.should.be.rejectedWith(Error)
     })
 
     it('should not create transformed component', () => {

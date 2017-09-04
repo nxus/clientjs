@@ -48,9 +48,9 @@ import {application as app, NxusModule} from 'nxus-core'
  *
  * ## Usage
  *
- * ClientJS currently supports bundling scripts from a JS file entry point using webpack, or Polymer web components
- * HTML file entry point. Both options will serve the resulting file from a temporary location and process the
- * results using babel if configured, and insert the necessary script/link tags into a selected template.
+ * ClientJS currently supports bundling scripts from a JS file entry point or Polymer web components
+ * HTML file entry point using webpack. Both options will serve the resulting file from a temporary location
+ * and process the results using babel if configured, and insert the necessary script tags for a given template.
  *
  *     app.get('clientjs').includeScript('my-template', __dirname+"/js/entry.js")
  *
