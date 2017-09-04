@@ -111,7 +111,6 @@ class ClientJS extends NxusModule {
   constructor () {
     super()
     this._outputPaths = {}
-    this._bundleCache = {}
 
     if(_.isEmpty(this.config.babel))
       this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
@@ -309,19 +308,6 @@ class ClientJS extends NxusModule {
 
     this._establishRoute(outputRoute, outputPath)
 
-    if (this._bundleCache[entry]) {
-      let [promise, js] = this._bundleCache[entry]
-      return promise.then(() => {
-        try {
-          let fstat = fs.lstatSync(outputFile)
-          if (fstat.isSymbolicLink()) fs.unlinkSync(outputFile)
-        } catch (e) {
-          if (e.code !== 'ENOENT') throw e
-        }
-        fs.copySync(js, outputFile)
-      })
-    }
-
     var options = this._webpackConfig(entry, outputPath, outputFilename)
     
     let promise = new Promise((resolve, reject) => {
@@ -351,7 +337,6 @@ class ClientJS extends NxusModule {
         })
     })
 
-//    this._bundleCache[entry] = [promise, outputFile]
     return promise
   }
 
