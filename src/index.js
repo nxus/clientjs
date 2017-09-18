@@ -1,19 +1,11 @@
 'use strict'
 
 import Promise from 'bluebird'
-import browserify from 'browserify'
-import babelify from 'babelify'
-import watchify from 'watchify'
+import webpack from 'webpack'
 import path from 'path'
 import fs from 'fs-extra'
 import _ from 'underscore'
 import morph from 'morph'
-
-import Vulcanize from 'vulcanize'
-import crisper from 'crisper'
-import * as babel from 'babel-core'
-import * as parse5 from 'parse5'
-import * as dom5 from 'dom5'
 
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
@@ -24,7 +16,8 @@ import {application as app, NxusModule} from 'nxus-core'
  *
  * [![Build Status](https://travis-ci.org/nxus/clientjs.svg?branch=master)](https://travis-ci.org/nxus/clientjs)
  * 
- * Compacts, processes and bundles code for inclusion in the browser.  Uses browserify and babel to process source files, and makes
+ * 
+ * Compacts, processes and bundles code for inclusion in the browser.  Uses webpack and babel to process source files, and makes
  * the processed file available via a static route.
  *
  * ## Installation
@@ -34,22 +27,39 @@ import {application as app, NxusModule} from 'nxus-core'
  * ## Configuration Options
  * 
  *       'client_js': {
- *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file
+ *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file options
+ *         'watchify': true, // Whether to have webpack watch for changes - add your js to .nxusrc 'ignore' if so
+ *         'minify': true, // Whether to have webpack minify output
+ *         'webpackConfig': {}, // Additional webpack config, merged with default.
  *         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
  *         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
  *         'webcomponentsURL': 'js/wc-min.js', // URL to include for WC polyfill
- *         'reincludeComponentScripts': {} // components to ignore from babel compilation but include in scripts
+ *         'reincludeComponentScripts': {}, // components to ignore from babel compilation but include in scripts
+ *         'buildNone': false, // For production, to skip any bundling if pre-building during deploy
+ *         'buildOnly': false, // For building during deploy scripts
+ *         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts 
  *       }
  *
  * ## Usage
  *
- * To use the module, there are two steps: 1) create the bundle, and 2) include/inject the source into your page.
+ * ClientJS currently supports bundling scripts from a JS file entry point or Polymer web components
+ * HTML file entry point using webpack. Both options will serve the resulting file from a temporary location
+ * and process the results using babel if configured, and insert the necessary script tags for a given template.
  *
- * ### Creating the bundle
+ *     app.get('clientjs').includeScript('my-template', __dirname+"/js/entry.js")
  *
- *     app.get('clientjs').bundle('/my/local/file.js', '/browser/path/to/file.js')
  *
- * ### Include/inject the source file
+ * ### Creating a bundle for manual inclusion in a template
+ *
+ * These are the low-level steps that `includeScript` performs:
+ *
+ *     app.get('clientjs').bundle('/my/local/file.js', '/path/to/serve/file.js')
+ *
+ * Serve the bundled path using `router.staticRoute`:
+ *
+ *     app.get('router').staticRoute('/browser/path/to', '/path/to/serve')
+ *
+ * Then include/inject the source file:
  *
  * You can either include the output path as specified when you creatd the bundle
  *
@@ -95,7 +105,6 @@ class ClientJS extends NxusModule {
   constructor () {
     super()
     this._outputPaths = {}
-    this._componentCache = {}
 
     if(_.isEmpty(this.config.babel))
       this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
@@ -117,11 +126,14 @@ class ClientJS extends NxusModule {
   _defaultConfig() {
     return {     
       watchify: true,
+      minify: true,
+      webpackConfig: {},
       routePrefix: '/assets/clientjs',
       assetFolder: '.tmp/clientjs',
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
       reincludeComponentScripts: {},
       entries: {},
+      sourceMap: app.config.NODE_ENV != 'production' ? 'cheap-module-eval-source-map' : 'source-map',
       buildSeries: false,
       buildOnly: false,
       buildNone: false
@@ -148,7 +160,7 @@ class ClientJS extends NxusModule {
   }
 
   /**
-   * Injects the passed script into to the specified template
+   * Injects the passed script entry into to the specified template after webpack/babel
    * @param  {String} templateName the name of the template to include the script into
    * @param  {[type]} script       the path of the script file to include
    */
@@ -157,41 +169,43 @@ class ClientJS extends NxusModule {
     let outputPath = path.join(morph.toDashed(templateName), scriptName)
     let outputUrl = path.join(this.config.routePrefix,outputPath)
 
-    templater.on('renderContext.'+templateName, () => {
-      return {scripts: [outputUrl]}
-    })
+    let imports, scripts, headScripts
 
+    if (script.slice(-4) == 'html') {
+      outputPath += ".js"
+      imports = []
+      for (let s in this.config.reincludeComponentScripts) {
+        imports.push(this.config.reincludeComponentScripts[s])
+      }
+      headScripts = [
+        this.config.webcomponentsURL,
+      ]
+      scripts = [outputUrl]
+    } else {
+      scripts = [outputUrl]
+    }
+
+    templater.on('renderContext.'+templateName, () => {
+      return {
+        headScripts,
+        scripts,
+        imports
+      }
+    })
+    
     this._buildWhenReady(() => {
       return this.bundle(script, outputPath)
     })
   }
 
   /**
-   * Injects the passed web component into to the specified template
+   * @deprecated
+   * (Deprecated, includeScript now handles this.) Injects the passed web component entry into to the specified template after bundling/babel
    * @param  {String} templateName the name of the template to include the script into
    * @param  {[type]} script       the path of the component file to include
    */
   includeComponent(templateName, script) {
-    let scriptName = path.basename(script)
-    let outputPath = morph.toDashed(templateName) + "-" + scriptName
-    let outputHTML = path.join(this.config.routePrefix,outputPath)
-
-    let imports = []
-    for (let s in this.config.reincludeComponentScripts) {
-      imports.push(this.config.reincludeComponentScripts[s])
-    }
-    imports.push(outputHTML)
-
-    templater.on('renderContext.'+templateName, () => {
-      return {
-        headScripts: [this.config.webcomponentsURL],
-        imports
-      }
-    })
-
-    this._buildWhenReady(() => {
-      return this._componentize(script, outputPath)
-    })
+    return this.includeScript(templateName, script)
   }
 
   _establishRoute(route, path) {
@@ -202,69 +216,69 @@ class ClientJS extends NxusModule {
     }
   }
 
-  _componentize(entry, outputHTML) {
-    let outputHTMLDir = path.dirname(outputHTML)
-    if (outputHTMLDir == '.') {
-      outputHTMLDir = ''
+  _webpackConfig(entry, outputPath, outputFilename) {
+
+    var sourceMap = this.config.sourceMap
+    
+    let ignoreLinks = Object.keys(this.config.reincludeComponentScripts).map((x) => {
+      return new RegExp(x+"$")
+    })
+    
+    var options = {
+      entry: path.resolve(entry),
+      output: {
+        filename: outputFilename,
+        path: outputPath,
+        sourceMapFilename: outputFilename+'.map'
+      },
+      devtool: sourceMap ? sourceMap : false,
+      watch: this.config.watchify,
+      module: {
+        rules: [
+          {
+            test: /\.html$/,
+            use: [
+              {
+                loader: 'babel-loader',
+                options: this.config.babel
+              },
+              {
+                loader: 'polymer-webpack-loader',
+                options: {
+                  ignoreLinks,
+                  htmlLoader: {
+                    minimize: false
+                  }
+                }
+              }
+            ]
+          },
+          {
+            test: /\.js$/,
+            exclude: /(node_modules|bower_components)/,
+            use: {
+              loader: 'babel-loader',
+              options: this.config.babel
+            }
+          }
+        ]
+      }
     }
-    var outputRoute = this.config.routePrefix+outputHTMLDir
-    var outputPath = path.resolve(path.join(this.config.assetFolder, outputHTMLDir))
-    var outputFile = path.join(outputPath, path.basename(outputHTML))
-
-    this._establishRoute(outputRoute, outputPath)
-
-    if (this._componentCache[entry]) {
-      let [promise, html] = this._componentCache[entry]
-      return promise.then(() => {
-        try {
-          let fstat = fs.lstatSync(outputFile)
-          if (fstat.isSymbolicLink()) fs.unlinkSync(outputFile)
-        } catch (e) {
-          if (e.code !== 'ENOENT') throw e
-        }
-        fs.copySync(html, outputFile)
-      })
+    if (this.config.minify) {
+      options.plugins = [
+        new webpack.optimize.UglifyJsPlugin({
+          sourceMap,
+          compress: {
+            warnings: false,
+            drop_console: false,
+          }
+        })
+      ]
     }
-
-    this.log.debug(`Componentizing: ${entry}, output-html '${outputFile}'`)
-
-    const vulcanize = new Vulcanize({ // see https://www.npmjs.com/package/vulcanize
-      stripExcludes: Object.keys(this.config.reincludeComponentScripts),
-      inlineScripts: true
-    })
-
-    let babelOptions = Object.assign({babelrc: false}, this.config.babel)
-
-    let promise = new Promise((resolve, reject) => {
-      vulcanize.process(entry,
-        (err, html) => {
-          if (err) { reject(err); return }
-
-          let jsFileName = path.basename(outputFile) + '.js',
-              out = crisper({ // see https://github.com/PolymerLabs/crisper
-                source: html,
-                scriptInHead: false,
-                jsFileName: jsFileName }),
-              xfm = babel.transform(out.js, babelOptions)
-                // {code, map, ast}
-
-          let dom = parse5.parse(out.html),
-              script = dom5.query(dom, dom5.predicates.AND(
-                dom5.predicates.hasTagName('script'), dom5.predicates.hasAttrValue('src', jsFileName)))
-          dom5.removeAttribute(script, 'src')
-          dom5.setTextContent(script, '\n' + xfm.code.trim() + '\n')
-          let merged = parse5.serialize(dom)
-          fs.writeFileSync(outputFile, merged)
-          resolve()
-        }
-      )
-    })
-    .catch((err) => {
-      this.log.error("Componentize Error", err)
-    })
-
-    this._componentCache[entry] = [promise, outputFile]
-    return promise
+    if (this.config.webpackConfig) {
+      options = Object.assign(options, this.config.webpackConfig)
+    }
+    return options
   }
   
   /**
@@ -273,149 +287,48 @@ class ClientJS extends NxusModule {
    * @param  {[type]} output the output path to use in the browser to access the bundled source
    */
   bundle(entry, output) {
-    this.log.debug('Bundling', entry, output)
+    this.log.debug('Bundling', entry, "to", output)
+    
+    let outputDir = path.dirname(output)
+    if (outputDir == '.') {
+      outputDir = ''
+    }
 
     if(output && output[0] != '/') output = '/'+output //add prepending slash if not set
     var outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
     var outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
     var outputFile = this.config.assetFolder+output
-    var outputMap = this.config.assetFolder+output+'.map'
-    var outputMapUrl = outputRoute+'/'+path.basename(output)+'.map'
+    var outputFilename = path.basename(outputFile)
 
     this._establishRoute(outputRoute, outputPath)
+
+    var options = this._webpackConfig(entry, outputPath, outputFilename)
     
-    var options = {
-      entries: [entry],
-      cache: {},
-      packageCache: {},
-      debug: true
-    }
-    if (this.config.watchify) {
-      options.plugin = [watchify]
-    }
-    let b = browserify(options)
-      .transform(babelify.configure(this.config.babel))
-      .plugin('minifyify', {map: outputMapUrl, output: outputMap})
-    let bundle = () => {
-      return new Promise((resolve, reject) => {
-        b.bundle((err, buf) => {
+    let promise = new Promise((resolve, reject) => {
+        webpack(options, (err, stats) => {
           if (err) {
-            this.log.error(`Browserify bundle error for ${entry}`, err)
+            this.log.error(`Bundle error for ${entry}`, err)
             reject(err)
             return
           }
-          fs.writeFileSync(outputFile, buf)
-          this.log.debug(`Browserify bundle for ${entry}, ${buf.byteLength} bytes written`)
+          let info = stats.toJson()
+          if (stats.hasErrors()) {
+            this.log.error(`Bundle errors for ${entry}: ${info.errors}`)
+            try {
+              let fstat = fs.lstatSync(outputFile)
+              if (fstat.isFile()) fs.unlinkSync(outputFile)
+            } catch (e) {
+              if (e.code !== 'ENOENT') throw e
+            }
+            reject(new Error(info.errors.toString()))
+            return
+          }
+          if (stats.hasWarnings()) {
+            this.log.error(`Bundle warnings for ${entry}: ${info.warnings}`)
+          }
+          this.log.debug(`Bundle for ${entry} written to ${outputFile}`)
           resolve()
         })
-        .on('error', (err) => {
-          // browserify pipeline errors aren't delivered to completion handler; have to catch them here
-          this.log.error(`Browserify bundle error event for ${entry}`, err.toString())
-          reject(err)
-        })
-      })
-    }
-    //b.on('update', bundle)
-    return bundle()
-  }
-
-  /** Failed attempt to use polymer-build to bundle Polymer component.
-   * (Left in place for now in case polymer-build eventually gets its
-   * act together, and we want to try again to use it. I spent enough
-   * futile effort on it that I hate to just throw it away.)
-   *
-   * Needs:
-   *   import {PolymerProject, HtmlSplitter} from 'polymer-build'
-   *   import vfs from 'vinyl-fs'
-   *   import babel from 'gulp-babel'
-   *   import through2 from 'through2'
-   *   import ternaryStream from 'ternary-stream'
-   *   import mergeStream from 'merge-stream'
-   *
-   * @private
-   */
-  _pipelineComponentize(entry, outputPath) {
-
-    /* Code to handle scripts that are to be excluded from bundling.
-      The `matchExcludedScript()` function identifies excluded scripts,
-      and `excludeTransform()` is a transform stream that keeps track
-      of scripts to be excluded. */
-    let excludeScripts = Object.keys(this.config.reincludeComponentScripts),
-        rootPath = path.dirname(path.resolve(entry)),
-        excludedScripts = [],
-        excludedURLs = []
-    const matchExcludedScript = (data) => {
-          for (let script of excludeScripts)
-            if (data.path.endsWith(script)) return script
-        }
-    const excludeTransform = through2.obj((data, enc, callback) => {
-          let script = matchExcludedScript(data)
-          if (script) {
-            let url = path.relative(rootPath, data.path)
-            excludedScripts.push(script)
-            excludedURLs.push(url)
-            // TO DO: is there some way to safely zero-out content?
-          }
-          callback(null, data)
-        })
-
-    /* Note: Error emitted by babel seems to have these properties:
-        // console.log(err.fileName + ( err.loc ? `( ${err.loc.line}, ${err.loc.column} ): ` : ': '));
-        // console.log('error Babel: ' + err.message + '\n');
-        // console.log(err.codeFrame);
-     */
-    const babelTransform = ternaryStream(
-          data => (data.extname === '.js') && !matchExcludedScript(data),
-          babel(this.config.babel))
-
-    /* Hack around inability to set project root in PolymerProject.
-      (However, doing this early in the pipeline seems to confuse the
-      Polymer build code.) */
-    const baseTransform = through2.obj((data, enc, callback) => {
-          if (data.path.startsWith(root)) data.base = root
-          callback(null, data)
-        })
-
-    const makeTrace = (id) => {
-      let self = this
-      return through2.obj((data, enc, callback) => {
-        self.log.debug(`${id}: ${data.relative}`)
-        callback(null, data)
-      })
-    }
-
-    let root = path.resolve(path.dirname(entry)),
-        entrypoint = path.basename(entry),
-        project = new PolymerProject({
-          root,
-          entrypoint,
-          sources: [ ], // suppress default
-          extraDependencies: [ ]
-        }),
-        sourceHtmlSplitter = new HtmlSplitter(),
-        dependencyHtmlSplitter = new HtmlSplitter()
-
-    let promise = new Promise((resolve, reject) => {
-      function errorHandler(err) { reject(err); this.emit('end') }
-
-      let sourceStream = project.sources().on('error', errorHandler)
-            // .pipe(baseTransform)
-            .pipe(sourceHtmlSplitter.split()).on('error', errorHandler)
-            .pipe(babelTransform).on('error', errorHandler)
-            .pipe(sourceHtmlSplitter.rejoin()),
-          dependencyStream = project.dependencies().on('error', errorHandler)
-            .pipe(excludeTransform)
-            // .pipe(baseTransform)
-            .pipe(dependencyHtmlSplitter.split()).on('error', errorHandler)
-            .pipe(babelTransform).on('error', errorHandler)
-            .pipe(dependencyHtmlSplitter.rejoin())
-
-      mergeStream(sourceStream, dependencyStream)
-        .pipe(project.bundler({excludes: excludedURLs}))
-        .pipe(vfs.dest(outputPath, { cwd: root }))
-        .on('end', resolve)
-    }).catch((err) => {
-      this.log.error("Componentize Error", err)
     })
 
     return promise
