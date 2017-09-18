@@ -33,10 +33,7 @@
     "babel-loader": "^7.1.2",
     "babel-preset-env": "^1.6.0",
     "bluebird": "^3.0.6",
-    "crisper": "^2.0.2",
-    "dom5": "^2.3.0",
     "fs-extra": "^3.0.1",
-    "minifyify": "^7.3.3",
     "morph": "^0.2.0",
     "nxus-core": "^4.0.0",
     "nxus-router": "^4.0.0",
@@ -46,7 +43,6 @@
     "rc": "^1.1.6",
     "traverse": "^0.6.6",
     "underscore": "^1.8.3",
-    "vulcanize": "^1.14.8",
     "webpack": "^3.5.5"
   },
   "devDependencies": {

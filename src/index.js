@@ -7,12 +7,6 @@ import fs from 'fs-extra'
 import _ from 'underscore'
 import morph from 'morph'
 
-import Vulcanize from 'vulcanize'
-import crisper from 'crisper'
-import * as babel from 'babel-core'
-import * as parse5 from 'parse5'
-import * as dom5 from 'dom5'
-
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
 
