@@ -167,9 +167,8 @@ class ClientJS extends NxusModule {
   includeScript(templateName, script) {
     let scriptName = path.basename(script)
     let outputPath = path.join(morph.toDashed(templateName), scriptName)
-    let outputUrl = path.join(this.config.routePrefix,outputPath)
 
-    let imports, scripts, headScripts
+    let imports, headScripts
 
     if (script.slice(-4) == 'html') {
       outputPath += ".js"
@@ -180,10 +179,9 @@ class ClientJS extends NxusModule {
       headScripts = [
         this.config.webcomponentsURL,
       ]
-      scripts = [outputUrl]
-    } else {
-      scripts = [outputUrl]
     }
+
+    let scripts = [path.join(this.config.routePrefix,outputPath)]
 
     templater.on('renderContext.'+templateName, () => {
       return {
