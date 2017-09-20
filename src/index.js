@@ -168,7 +168,7 @@ class ClientJS extends NxusModule {
     let scriptName = path.basename(script)
     let outputPath = path.join(morph.toDashed(templateName), scriptName)
 
-    let imports, headScripts
+    let imports = [], headScripts = []
 
     if (script.slice(-4) == 'html') {
       outputPath += ".js"
@@ -221,16 +221,25 @@ class ClientJS extends NxusModule {
     let ignoreLinks = Object.keys(this.config.reincludeComponentScripts).map((x) => {
       return new RegExp(x+"$")
     })
-    
+
     var options = {
       entry: path.resolve(entry),
       output: {
         filename: outputFilename,
-        path: outputPath,
-        sourceMapFilename: outputFilename+'.map'
+        path: outputPath
       },
       devtool: sourceMap ? sourceMap : false,
       watch: this.config.watchify,
+      resolve: {
+        modules: [
+          "node_modules",
+          "bower_components"
+        ],
+        descriptionFiles: [
+          "package.json",
+          "bower.json"
+        ]
+      },
       module: {
         rules: [
           {
