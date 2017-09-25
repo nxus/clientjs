@@ -2,6 +2,7 @@
 
 import Promise from 'bluebird'
 import webpack from 'webpack'
+import UglifyJsPlugin from 'uglifyjs-webpack-plugin'
 import path from 'path'
 import fs from 'fs-extra'
 import _ from 'underscore'
@@ -31,6 +32,7 @@ import {application as app, NxusModule} from 'nxus-core'
  *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file options
  *         'watchify': true, // Whether to have webpack watch for changes - add your js to .nxusrc 'ignore' if so
  *         'minify': true, // Whether to have webpack minify output
+ *         'sourceMap': 'cheap-module-eval-source-map', // Sourcemap devtool option for webpack
  *         'webpackConfig': {}, // Additional webpack config, merged with default.
  *         'appendRulesConfig': false, // should webpack config rules be merged or replace the default
  *         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
@@ -135,7 +137,7 @@ class ClientJS extends NxusModule {
       assetFolder: '.tmp/clientjs',
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
       entries: {},
-      sourceMap: app.config.NODE_ENV != 'production' ? 'cheap-module-eval-source-map' : 'source-map',
+      sourceMap: app.config.NODE_ENV != 'production' ? 'cheap-module-eval-source-map' : false,
       buildSeries: false,
       buildOnly: false,
       buildNone: false
@@ -282,12 +284,8 @@ class ClientJS extends NxusModule {
     }
     if (this.config.minify) {
       options.plugins = [
-        new webpack.optimize.UglifyJsPlugin({
-          sourceMap,
-          compress: {
-            warnings: false,
-            drop_console: false,
-          }
+        new UglifyJsPlugin({
+          sourceMap: sourceMap ? true : false
         })
       ]
     }
