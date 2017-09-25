@@ -135,7 +135,7 @@ describe('ClientJS', function () {
 
     it('should use the application client_js config', () => {
       expect(clientjs.config.babel).to.exist
-      clientjs.config.babel.should.deep.equal(configBabel)
+      clientjs.config.babel.should.deep.equal(Object.assign({cacheDirectory: true}, configBabel))
     })
 
     it('should provide asset routes', ()=> {
