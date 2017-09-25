@@ -223,9 +223,6 @@ class ClientJS extends NxusModule {
     let polymerLoader = {
       loader: 'polymer-webpack-loader',
       options: {
-        ignorePathReWrite: [
-          '/loader\?/'
-        ],
         htmlLoader: {
           minimize: false
         }
@@ -305,9 +302,9 @@ class ClientJS extends NxusModule {
       // special case module.rules update
       let moduleConfig = {}
       if (this.config.appendRulesConfig && localConfig.module && localConfig.module.rules) {
-        moduleConfig.rules = localConfig.module.rules.concat(options.module.rules)
+        moduleConfig.module = {rules: localConfig.module.rules.concat(options.module.rules)}
       }
-      options = Object.assign(options, localConfig, {module: moduleConfig})
+      options = Object.assign(options, localConfig, moduleConfig)
     }
 
     return options
