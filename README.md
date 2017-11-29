@@ -21,11 +21,12 @@ the processed file available via a static route.
         'babel': {}, // Babel specific options. Defaults to the project .babelrc file options
         'watchify': true, // Whether to have webpack watch for changes - add your js to .nxusrc 'ignore' if so
         'minify': true, // Whether to have webpack minify output
+        'sourceMap': 'cheap-module-eval-source-map', // Sourcemap devtool option for webpack
         'webpackConfig': {}, // Additional webpack config, merged with default.
+        'appendRulesConfig': false, // should webpack config rules be merged or replace the default
         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
         'webcomponentsURL': 'js/wc-min.js', // URL to include for WC polyfill
-        'reincludeComponentScripts': {}, // components to ignore from babel compilation but include in scripts
         'buildNone': false, // For production, to skip any bundling if pre-building during deploy
         'buildOnly': false, // For building during deploy scripts
         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts 
