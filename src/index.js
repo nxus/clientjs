@@ -2,10 +2,12 @@
 
 import Promise from 'bluebird'
 import webpack from 'webpack'
+import UglifyJsPlugin from 'uglifyjs-webpack-plugin'
 import path from 'path'
 import fs from 'fs-extra'
 import _ from 'underscore'
 import morph from 'morph'
+import traverse from 'traverse'
 
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
@@ -30,11 +32,12 @@ import {application as app, NxusModule} from 'nxus-core'
  *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file options
  *         'watchify': true, // Whether to have webpack watch for changes - add your js to .nxusrc 'ignore' if so
  *         'minify': true, // Whether to have webpack minify output
+ *         'sourceMap': 'cheap-module-eval-source-map', // Sourcemap devtool option for webpack
  *         'webpackConfig': {}, // Additional webpack config, merged with default.
+ *         'appendRulesConfig': false, // should webpack config rules be merged or replace the default
  *         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
  *         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
  *         'webcomponentsURL': 'js/wc-min.js', // URL to include for WC polyfill
- *         'reincludeComponentScripts': {}, // components to ignore from babel compilation but include in scripts
  *         'buildNone': false, // For production, to skip any bundling if pre-building during deploy
  *         'buildOnly': false, // For building during deploy scripts
  *         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts 
@@ -108,6 +111,7 @@ class ClientJS extends NxusModule {
 
     if(_.isEmpty(this.config.babel))
       this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
+    this.config.babel.cacheDirectory = true
     this._fromConfigBundles(app)
 
     this._builders = []
@@ -128,12 +132,12 @@ class ClientJS extends NxusModule {
       watchify: true,
       minify: true,
       webpackConfig: {},
+      appendRulesConfig: false,
       routePrefix: '/assets/clientjs',
       assetFolder: '.tmp/clientjs',
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
-      reincludeComponentScripts: {},
       entries: {},
-      sourceMap: app.config.NODE_ENV != 'production' ? 'cheap-module-eval-source-map' : 'source-map',
+      sourceMap: app.config.NODE_ENV != 'production' ? 'cheap-module-eval-source-map' : false,
       buildSeries: false,
       buildOnly: false,
       buildNone: false
@@ -167,9 +171,8 @@ class ClientJS extends NxusModule {
   includeScript(templateName, script) {
     let scriptName = path.basename(script)
     let outputPath = path.join(morph.toDashed(templateName), scriptName)
-    let outputUrl = path.join(this.config.routePrefix,outputPath)
 
-    let imports, scripts, headScripts
+    let imports = [], headScripts = []
 
     if (script.slice(-4) == 'html') {
       outputPath += ".js"
@@ -180,10 +183,9 @@ class ClientJS extends NxusModule {
       headScripts = [
         this.config.webcomponentsURL,
       ]
-      scripts = [outputUrl]
-    } else {
-      scripts = [outputUrl]
     }
+
+    let scripts = [path.join(this.config.routePrefix,outputPath)]
 
     templater.on('renderContext.'+templateName, () => {
       return {
@@ -219,38 +221,54 @@ class ClientJS extends NxusModule {
   _webpackConfig(entry, outputPath, outputFilename) {
 
     var sourceMap = this.config.sourceMap
-    
-    let ignoreLinks = Object.keys(this.config.reincludeComponentScripts).map((x) => {
-      return new RegExp(x+"$")
-    })
+
+    let polymerLoader = {
+      loader: 'polymer-webpack-loader',
+      options: {
+        htmlLoader: {
+          minimize: false
+        }
+      }
+    }
     
     var options = {
       entry: path.resolve(entry),
       output: {
         filename: outputFilename,
-        path: outputPath,
-        sourceMapFilename: outputFilename+'.map'
+        path: outputPath
       },
       devtool: sourceMap ? sourceMap : false,
       watch: this.config.watchify,
+      resolve: {
+        modules: [
+          "node_modules",
+          "bower_components"
+        ],
+        descriptionFiles: [
+          "package.json",
+          "bower.json"
+        ]
+      },
       module: {
         rules: [
+          // web components that need babel
           {
             test: /\.html$/,
+            exclude: /(node_modules|bower_components)/,
             use: [
               {
                 loader: 'babel-loader',
                 options: this.config.babel
               },
-              {
-                loader: 'polymer-webpack-loader',
-                options: {
-                  ignoreLinks,
-                  htmlLoader: {
-                    minimize: false
-                  }
-                }
-              }
+              polymerLoader
+            ]
+          },
+          // web components that do not need babel
+          {
+            test: /\.html$/,
+            include: /(node_modules|bower_components)/,
+            use: [
+              polymerLoader
             ]
           },
           {
@@ -266,18 +284,27 @@ class ClientJS extends NxusModule {
     }
     if (this.config.minify) {
       options.plugins = [
-        new webpack.optimize.UglifyJsPlugin({
-          sourceMap,
-          compress: {
-            warnings: false,
-            drop_console: false,
-          }
+        new UglifyJsPlugin({
+          sourceMap: sourceMap ? true : false
         })
       ]
     }
     if (this.config.webpackConfig) {
-      options = Object.assign(options, this.config.webpackConfig)
+      let localConfig = Object.assign({}, this.config.webpackConfig)
+      // hydrate regexps from json config
+      traverse(localConfig).forEach(function(n) {
+        if (_.isString(n) && n.substring(0,1) == "/" && n.substring(-1, 1) == "/") {
+          this.update(new RegExp(n.substring(1, n.length-1)))
+        }
+      })
+      // special case module.rules update
+      let moduleConfig = {}
+      if (this.config.appendRulesConfig && localConfig.module && localConfig.module.rules) {
+        moduleConfig.module = {rules: localConfig.module.rules.concat(options.module.rules)}
+      }
+      options = Object.assign(options, localConfig, moduleConfig)
     }
+
     return options
   }
   

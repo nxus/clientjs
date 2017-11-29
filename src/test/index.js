@@ -135,7 +135,7 @@ describe('ClientJS', function () {
 
     it('should use the application client_js config', () => {
       expect(clientjs.config.babel).to.exist
-      clientjs.config.babel.should.deep.equal(configBabel)
+      clientjs.config.babel.should.deep.equal(Object.assign({cacheDirectory: true}, configBabel))
     })
 
     it('should provide asset routes', ()=> {
@@ -224,16 +224,11 @@ describe('ClientJS', function () {
         templates = [ 'my-template1', 'my-template2' ],
         outputs = templates.map(t => `${t}-${componentEntries[entry]}`)
 
-    const config = {
-      minify: false, // FIXME Uglify is failing on this component, so skipping for test
-      reincludeComponentScripts: {
-        'polymer/polymer.html': '/js-deps/polymer/polymer.html' } }
-
     before(() => {
       templater.on.reset()
       for (let output of outputs)
         clearOutputData(output, Object.keys(componentRefs[entry]))
-      clientjs = makeClientJS(config)
+      clientjs = makeClientJS()
       for (let template of templates)
         clientjs.includeComponent(template, entry)
       emitLifecycleEvent('launch')
