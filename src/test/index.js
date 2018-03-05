@@ -20,7 +20,7 @@ const configEntries = {
   'src/test/apps/two.js': 'test/apps/two-bundled.js'  // (in .tmp/clientjs/)
 }
 const scriptEntries = {
-  'src/test/apps/one.js': 'my-template/one.js' // (in .tmp/clientjs/)
+  'src/test/apps/one.js': 'one.js' // (in .tmp/clientjs/)
 }
 const componentEntries = {
   'src/test/apps/component-one.html': 'component-one.html.js' // (in .tmp/clientjs/)
@@ -160,6 +160,7 @@ describe('ClientJS', function () {
       .then(() => {
         // initialize after config builds have taken place
         clearOutputData(output, Object.keys(configRefs[entry]))
+        clientjs._outputPaths = []
         return clientjs.bundle(entry, output)
       })
     })
@@ -211,7 +212,7 @@ describe('ClientJS', function () {
 
     it('should call templater.on() and router.staticRoute()', ()=> {
       templater.on.calledWith('renderContext.my-template').should.be.true
-      router.staticRoute.calledWith('/assets/clientjs/my-template').should.be.true
+      router.staticRoute.calledWith('/assets/clientjs').should.be.true
     })
 
     it('should create bundle one', () => {
