@@ -170,7 +170,7 @@ class ClientJS extends NxusModule {
    */
   includeScript(templateName, script) {
     let scriptName = path.basename(script)
-    let outputPath = path.join(morph.toDashed(templateName), scriptName)
+    let outputPath = scriptName
 
     let imports = [], headScripts = []
 
@@ -213,7 +213,6 @@ class ClientJS extends NxusModule {
   _establishRoute(route, path) {
     fs.ensureDirSync(path) //create directory if it doesn't exist
     if (!(path in this._outputPaths)) {
-      this._outputPaths[path] = true
       router.staticRoute(route, path)
     }
   }
@@ -327,11 +326,10 @@ class ClientJS extends NxusModule {
     var outputFile = this.config.assetFolder+output
     var outputFilename = path.basename(outputFile)
 
-    this._establishRoute(outputRoute, outputPath)
-
-    var options = this._webpackConfig(entry, outputPath, outputFilename)
-    
-    let promise = new Promise((resolve, reject) => {
+    let promise = this._outputPaths[outputFile]
+    if (!promise) {
+      promise = new Promise((resolve, reject) => {
+        var options = this._webpackConfig(entry, outputPath, outputFilename)
         webpack(options, (err, stats) => {
           if (err) {
             this.log.error(`Bundle error for ${entry}`, err)
@@ -356,11 +354,13 @@ class ClientJS extends NxusModule {
           this.log.debug(`Bundle for ${entry} written to ${outputFile}`)
           resolve()
         })
-    })
-
+      })
+      this._establishRoute(outputRoute, outputPath)
+      this._outputPaths[outputFile] = promise
+      
+    }
     return promise
   }
-
 }
 
 
