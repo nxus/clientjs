@@ -96,14 +96,14 @@ Injects the passed script entry into to the specified template after webpack/bab
 
 **Parameters**
 
--   `templateName` **[String](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)** the name of the template to include the script into
+-   `templateName` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** the name of the template to include the script into
 -   `script` **\[type]** the path of the script file to include
 
 ### includeComponent
 
 **Parameters**
 
--   `templateName` **[String](https://developer.mozilla.org/en-US/docs/Web/JavaScript/Reference/Global_Objects/String)** the name of the template to include the script into
+-   `templateName` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** the name of the template to include the script into
 -   `script` **\[type]** the path of the component file to include
 
 **Meta**
