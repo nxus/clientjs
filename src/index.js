@@ -5,7 +5,7 @@ import webpack from 'webpack'
 import UglifyJsPlugin from 'uglifyjs-webpack-plugin'
 import path from 'path'
 import fs from 'fs-extra'
-import _ from 'underscore'
+import {omit, isString, isEmpty, zip} from 'underscore'
 import morph from 'morph'
 import traverse from 'traverse'
 
@@ -13,6 +13,24 @@ import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
 
 import {application as app, NxusModule} from 'nxus-core'
+
+function subPath(script) {
+  // determine subpath of script for output
+  script = path.normalize(script)
+  let paths = zip(script.split(path.sep), __dirname.split(path.sep))
+  let a, b, c, scriptPaths = []
+  while (c = paths.shift()) {
+    [a,b] = c
+    if (scriptPaths == '' && a == b) {
+      continue
+    }
+    if (a) {
+      scriptPaths.push(a)
+    }
+  }
+  return scriptPaths.join(path.sep)
+}
+
 
 /**
  *
@@ -109,8 +127,8 @@ class ClientJS extends NxusModule {
     super()
     this._outputPaths = {}
 
-    if(_.isEmpty(this.config.babel))
-      this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
+    if(isEmpty(this.config.babel))
+      this.config.babel = omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
     this.config.babel.cacheDirectory = true
     this._fromConfigBundles(app)
 
@@ -169,8 +187,7 @@ class ClientJS extends NxusModule {
    * @param  {[type]} script       the path of the script file to include
    */
   includeScript(templateName, script) {
-    let scriptName = path.basename(script)
-    let outputPath = scriptName
+    let outputPath = subPath(script)
 
     let imports = [], headScripts = []
 
@@ -292,7 +309,7 @@ class ClientJS extends NxusModule {
       let localConfig = Object.assign({}, this.config.webpackConfig)
       // hydrate regexps from json config
       traverse(localConfig).forEach(function(n) {
-        if (_.isString(n) && n.substring(0,1) == "/" && n.substring(-1, 1) == "/") {
+        if (isString(n) && n.substring(0,1) == "/" && n.substring(-1, 1) == "/") {
           this.update(new RegExp(n.substring(1, n.length-1)))
         }
       })
