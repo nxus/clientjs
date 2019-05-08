@@ -14,16 +14,26 @@ import {application as app} from 'nxus-core'
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
 
-const configBabel = { presets: [ 'es2015' ] }
+const configBabel = {
+  "presets": [
+    ["env", {
+      "targets": {
+        "node": "current"
+      }
+    }]
+  ]
+}
+
 const configEntries = {
   'src/test/apps/one.js': 'test/apps/one-bundled.js', // (in .tmp/clientjs/)
   'src/test/apps/two.js': 'test/apps/two-bundled.js'  // (in .tmp/clientjs/)
 }
 const scriptEntries = {
-  'src/test/apps/one.js': 'one.js' // (in .tmp/clientjs/)
+  'apps/one.js': 'test/apps/one.js', // (in .tmp/clientjs/)
+  'apps/other/one.js': 'test/apps/other/one.js' // (in .tmp/clientjs/)
 }
 const componentEntries = {
-  'src/test/apps/component-one.html': 'component-one.html.js' // (in .tmp/clientjs/)
+  'src/test/apps/component-one.html': 'src/test/apps/component-one.html.js' // (in .tmp/clientjs/)
 }
 
 const defaultConfig = { babel: configBabel, sourceMap: 'source-map'}
@@ -69,7 +79,12 @@ function clearOutputData(out, exts) {
 function loadReferenceData(entries, ref, exts) {
   let refs = {}
   for (let key in entries) {
-    let root = trimExt(path.posix.resolve(ref, path.posix.basename(entries[key])))
+    let dataPath = path.posix.basename(entries[key])
+    // work around basename conflict for this test case
+    if (entries[key] == 'test/apps/other/one.js') {
+      dataPath = 'other-one.js'
+    }
+    let root = trimExt(path.posix.resolve(ref, dataPath))
     refs[key] = {}
     for (let ext of exts) {
       try { refs[key][ext] = fs.readFileSync(root + ext, 'utf8') } catch (e) {}
@@ -82,6 +97,7 @@ function loadReferenceData(entries, ref, exts) {
  */
 function compareReferenceData(refs, out) {
   let root = trimExt(path.posix.resolve('.tmp/clientjs', out))
+  expect(Object.keys(refs).length).to.equal(2, "Missing reference data for "+out)
   for (let ext in refs) {
     let data = fs.readFileSync(root + ext, 'utf8')
     expect(data).to.equal(refs[ext])
@@ -92,7 +108,7 @@ function compareReferenceData(refs, out) {
 describe('ClientJS', function () {
   var configRefs = loadReferenceData(configEntries, 'src/test/data/bundle/', [ '.js', '.js.map' ]),
       scriptRefs = loadReferenceData(scriptEntries, 'src/test/data/script/', [ '.js', '.js.map' ]),
-      componentRefs = loadReferenceData(componentEntries, 'src/test/data/component/', [ '.html' ]),
+      componentRefs = loadReferenceData(componentEntries, 'src/test/data/component/', [ '.js','.js.map' ]),
       clientjs
 
   this.timeout(5000)
@@ -199,13 +215,17 @@ describe('ClientJS', function () {
   describe('Include Script', () => {
     let entry = Object.keys(scriptEntries)[0],
         output = scriptEntries[entry]
+    let entry2 = Object.keys(scriptEntries)[1],
+        output2 = scriptEntries[entry2]
 
     before(() => {
       templater.on.reset()
       router.staticRoute.reset()
       clearOutputData(output, Object.keys(scriptRefs[entry]))
+      clearOutputData(output2, Object.keys(scriptRefs[entry2]))
       clientjs = makeClientJS()
-      clientjs.includeScript('my-template', entry)
+      clientjs.includeScript('my-template', __dirname + "/" + entry)
+      clientjs.includeScript('my-template', __dirname + "/" + entry2)
       emitLifecycleEvent('launch')
       return clientjs.readyToBuild // await completion of build (so we can check results)
     })
@@ -218,17 +238,19 @@ describe('ClientJS', function () {
     it('should create bundle one', () => {
       compareReferenceData(scriptRefs[entry], output)
     })
+    it('should create bundle other one with same basename', () => {
+      compareReferenceData(scriptRefs[entry2], output2)
+    })
   })
 
   describe('Include Component', () => {
     let entry = Object.keys(componentEntries)[0],
-        templates = [ 'my-template1', 'my-template2' ],
-        outputs = templates.map(t => `${t}-${componentEntries[entry]}`)
+        templates = ['my-template1', 'my-template2'],
+        output = componentEntries[entry]
 
     before(() => {
       templater.on.reset()
-      for (let output of outputs)
-        clearOutputData(output, Object.keys(componentRefs[entry]))
+      clearOutputData(output, Object.keys(componentRefs[entry]))
       clientjs = makeClientJS()
       for (let template of templates)
         clientjs.includeComponent(template, entry)
@@ -242,8 +264,7 @@ describe('ClientJS', function () {
     })
 
     it('should create transformed component', () => {
-      for (let output of outputs)
-        compareReferenceData(componentRefs[entry], output)
+      compareReferenceData(componentRefs[entry], output)
     })
   })
 

@@ -1,6 +1,6 @@
 {
   "name": "nxus-clientjs",
-  "version": "4.1.2",
+  "version": "4.1.3",
   "description": "Client JS compilation for Nxus applications",
   "main": "lib/",
   "scripts": {
@@ -9,6 +9,7 @@
     "test": "NODE_ENV=test mocha --compilers js:babel-register -R spec src/test",
     "compile": "rm -rf lib/; babel src --ignore src/test --out-dir lib",
     "prepublish": "npm run compile",
+    "prepare": "npm run compile",
     "postpublish": "npm run build-docs && npm run publish-docs",
     "build-docs": "export NAME=`npm view . name`; export VERSION=`npm view . version`; documentation readme ./src/index.js --name $NAME --project-version $VERSION --readme-file ./README.md -s $NAME",
     "publish-docs": "npm run build-docs && git add ./README.md && git commit -m 'Updated README API Docs' && git push"
@@ -48,11 +49,8 @@
     "webpack": "^3.5.5"
   },
   "devDependencies": {
-    "babel-cli": "^6.9.0",
-    "babel-core": "^6.9.0",
-    "babel-plugin-transform-class-properties": "^6.11.5",
-    "babel-plugin-transform-function-bind": "^6.8.0",
-    "babel-preset-es2015": "^6.9.0",
+    "babel-cli": "^6.26.0",
+    "babel-core": "^6.26.0",
     "chai": "^3.4.1",
     "chai-as-promised": "^5.1.0",
     "documentation": "^4.0.0-beta9",
