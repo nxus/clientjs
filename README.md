@@ -29,7 +29,7 @@ the processed file available via a static route.
         'webcomponentsURL': 'js/wc-min.js', // URL to include for WC polyfill
         'buildNone': false, // For production, to skip any bundling if pre-building during deploy
         'buildOnly': false, // For building during deploy scripts
-        'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts 
+        'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts
       }
 
 ## Usage
@@ -56,7 +56,7 @@ You can either include the output path as specified when you creatd the bundle
 
     <script source='/browser/path/to/file.js'></script>
 
-Or using Nxus Templater, you can inject the script by passing the output path to the `script` key on render or using the Templater 
+Or using Nxus Templater, you can inject the script by passing the output path to the `script` key on render or using the Templater
 lifecycle events.
 
     app.get('templater').render('my-template', {scripts: ['/browser/path/to/file.js']})
