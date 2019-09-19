@@ -17,17 +17,17 @@ import {application as app, NxusModule} from 'nxus-core'
 /**
  *
  * [![Build Status](https://travis-ci.org/nxus/clientjs.svg?branch=master)](https://travis-ci.org/nxus/clientjs)
- * 
- * 
+ *
+ *
  * Compacts, processes and bundles code for inclusion in the browser.  Uses webpack and babel to process source files, and makes
  * the processed file available via a static route.
  *
  * ## Installation
  *
  *     npm install nxus-clientjs --save
- * 
+ *
  * ## Configuration Options
- * 
+ *
  *       'client_js': {
  *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file options
  *         'watchify': true, // Whether to have webpack watch for changes - add your js to .nxusrc 'ignore' if so
@@ -40,7 +40,7 @@ import {application as app, NxusModule} from 'nxus-core'
  *         'webcomponentsURL': 'js/wc-min.js', // URL to include for WC polyfill
  *         'buildNone': false, // For production, to skip any bundling if pre-building during deploy
  *         'buildOnly': false, // For building during deploy scripts
- *         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts 
+ *         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts
  *       }
  *
  * ## Usage
@@ -68,7 +68,7 @@ import {application as app, NxusModule} from 'nxus-core'
  *
  *     <script source='/browser/path/to/file.js'></script>
  *
- * Or using Nxus Templater, you can inject the script by passing the output path to the `script` key on render or using the Templater 
+ * Or using Nxus Templater, you can inject the script by passing the output path to the `script` key on render or using the Templater
  * lifecycle events.
  *
  *     app.get('templater').render('my-template', {scripts: ['/browser/path/to/file.js']})
@@ -78,7 +78,7 @@ import {application as app, NxusModule} from 'nxus-core'
  *     app.get('templater').on('renderContext.my-template', () => {
  *          return {scripts: ['/browser/path/to/file.js']}
  *     })
- * 
+ *
  * ### Using ClientJS with Babel transforms
  *
  * You will need to install the necessary Babel presets and plugins
@@ -128,7 +128,7 @@ class ClientJS extends NxusModule {
   }
 
   _defaultConfig() {
-    return {     
+    return {
       watchify: true,
       minify: true,
       webpackConfig: {},
@@ -194,7 +194,7 @@ class ClientJS extends NxusModule {
         imports
       }
     })
-    
+
     this._buildWhenReady(() => {
       return this.bundle(script, outputPath)
     })
@@ -229,7 +229,7 @@ class ClientJS extends NxusModule {
         }
       }
     }
-    
+
     var options = {
       entry: path.resolve(entry),
       output: {
@@ -253,6 +253,17 @@ class ClientJS extends NxusModule {
           // web components that need babel
           {
             test: /\.html$/,
+            exclude: /(node_modules|bower_components)/,
+            use: [
+              {
+                loader: 'babel-loader',
+                options: this.config.babel
+              },
+              polymerLoader
+            ]
+          },
+          {
+            test: /\.css$/,
             exclude: /(node_modules|bower_components)/,
             use: [
               {
@@ -306,7 +317,7 @@ class ClientJS extends NxusModule {
 
     return options
   }
-  
+
   /**
    * Create a clientjs bundle that can be injected into a rendered page.
    * @param  {[type]} entry  the source file to bundle
@@ -314,7 +325,7 @@ class ClientJS extends NxusModule {
    */
   bundle(entry, output) {
     this.log.debug('Bundling', entry, "to", output)
-    
+
     let outputDir = path.dirname(output)
     if (outputDir == '.') {
       outputDir = ''
@@ -357,7 +368,7 @@ class ClientJS extends NxusModule {
       })
       this._establishRoute(outputRoute, outputPath)
       this._outputPaths[outputFile] = promise
-      
+
     }
     return promise
   }
@@ -367,4 +378,3 @@ class ClientJS extends NxusModule {
 var clientjs = ClientJS.getProxy()
 
 export {ClientJS as default, clientjs}
-
