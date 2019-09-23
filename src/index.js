@@ -8,6 +8,7 @@ import fs from 'fs-extra'
 import _ from 'underscore'
 import morph from 'morph'
 import traverse from 'traverse'
+import combineLoaders from 'webpack-combine-loaders'
 
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
@@ -262,16 +263,18 @@ class ClientJS extends NxusModule {
               polymerLoader
             ]
           },
+          // {
+          //   test: /\.css$/,
+          //   use: [{
+          //       loader: 'babel-loader',
+          //       options: this.config.babel
+          //     },
+          //     polymerLoader
+          //   ]
+          // },
           {
             test: /\.css$/,
-            include: /(node_modules|bower_components)/,
-            use: [
-              {
-                loader: 'babel-loader',
-                options: this.config.babel
-              },
-              polymerLoader
-            ]
+            use:['style-loader','css-loader']
           },
           // web components that do not need babel
           {
