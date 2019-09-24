@@ -1,6 +1,6 @@
 {
   "name": "nxus-clientjs",
-  "version": "4.1.5",
+  "version": "4.2.0",
   "description": "Client JS compilation for Nxus applications",
   "main": "lib/",
   "scripts": {
@@ -40,6 +40,7 @@
     "nxus-core": "^4.0.0",
     "nxus-router": "^4.0.0",
     "nxus-templater": "^4.0.0",
+    "only-if-changed-webpack-plugin": "https://github.com/vhadianto/only-if-changed-webpack-plugin.git",
     "polymer-webpack-loader": "^2.0.0",
     "rc": "^1.1.6",
     "script-loader": "^0.7.1",
@@ -47,7 +48,7 @@
     "traverse": "^0.6.6",
     "uglifyjs-webpack-plugin": "^1.0.0-beta.2",
     "underscore": "^1.8.3",
-    "webpack": "^3.5.5",
+    "webpack": "^4",
     "webpack-combine-loaders": "^2.0.4"
   },
   "devDependencies": {

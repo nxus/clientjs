@@ -9,11 +9,14 @@ import _ from 'underscore'
 import morph from 'morph'
 import traverse from 'traverse'
 import combineLoaders from 'webpack-combine-loaders'
+import OnlyIfChangedPlugin from 'only-if-changed-webpack-plugin'
 
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
 
 import {application as app, NxusModule} from 'nxus-core'
+
+import mkdirp from 'mkdirp'
 
 /**
  *
@@ -131,7 +134,7 @@ class ClientJS extends NxusModule {
   _defaultConfig() {
     return {
       watchify: true,
-      minify: true,
+      minify: app.config.NODE_ENV == 'production',
       webpackConfig: {},
       appendRulesConfig: false,
       routePrefix: '/assets/clientjs',
@@ -220,6 +223,13 @@ class ClientJS extends NxusModule {
 
   _webpackConfig(entry, outputPath, outputFilename) {
 
+    var opts = {
+      rootDir: process.cwd(),
+      devBuild: process.env.NODE_ENV !== 'production',
+      outputFilename
+    };
+
+    mkdirp(path.join(opts.rootDir, '.tmp/cache'))
     var sourceMap = this.config.sourceMap
 
     let polymerLoader = {
@@ -237,6 +247,13 @@ class ClientJS extends NxusModule {
         filename: outputFilename,
         path: outputPath
       },
+      mode: app.config.NODE_ENV,
+      plugins: [
+        new OnlyIfChangedPlugin({
+          cacheDirectory: path.join(opts.rootDir, '.tmp/cache'),
+          cacheIdentifier: opts, // all variable opts/environment should be used in cache key
+        })
+      ],
       devtool: sourceMap ? sourceMap : false,
       watch: this.config.watchify,
       resolve: {
@@ -263,15 +280,6 @@ class ClientJS extends NxusModule {
               polymerLoader
             ]
           },
-          // {
-          //   test: /\.css$/,
-          //   use: [{
-          //       loader: 'babel-loader',
-          //       options: this.config.babel
-          //     },
-          //     polymerLoader
-          //   ]
-          // },
           {
             test: /\.css$/,
             use:['style-loader','css-loader']
@@ -296,11 +304,11 @@ class ClientJS extends NxusModule {
       }
     }
     if (this.config.minify) {
-      options.plugins = [
+      options.plugins.unshift(
         new UglifyJsPlugin({
           sourceMap: sourceMap ? true : false
         })
-      ]
+      )
     }
     if (this.config.webpackConfig) {
       let localConfig = Object.assign({}, this.config.webpackConfig)
