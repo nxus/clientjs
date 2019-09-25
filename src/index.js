@@ -10,7 +10,7 @@ import morph from 'morph'
 import traverse from 'traverse'
 import combineLoaders from 'webpack-combine-loaders'
 import OnlyIfChangedPlugin from 'only-if-changed-webpack-plugin'
-
+import chokidar from 'chokidar'
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
 
@@ -108,10 +108,14 @@ import mkdirp from 'mkdirp'
  *     }
  * ```
  */
+
+var watcher
+
 class ClientJS extends NxusModule {
   constructor () {
     super()
     this._outputPaths = {}
+    this._watchPaths = {}
 
     if(_.isEmpty(this.config.babel))
       this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
@@ -124,11 +128,34 @@ class ClientJS extends NxusModule {
         resolve()
       })
     }).then(::this._buildingWhenReady)
+    .then(::this._setupWatcher)
     if (this.config.buildOnly) {
       this.readyToBuild.then(::app.stop).then(::process.exit)
     } else {
       this._establishRoute(this.config.routePrefix, this.config.assetFolder)
     }
+  }
+
+  _setupWatcher() {
+    if(!this.config.watchify) return
+    if(watcher && watcher.close) {
+      watcher.close()
+    }
+    let watchPaths = _.keys(this._watchPaths)
+    var watchOptions = {
+      //ignored: ignore ? ignore.concat([new RegExp("^(.*node_modules/(?!(@nxus|nxus-)).*)")]) : new RegExp("^(.*node_modules/(?!(@nxus|nxus-)).*)"),
+      ignoreInitial: true,
+      persistent: true
+    }
+
+    watcher = chokidar.watch(watchPaths, watchOptions)
+
+    watcher.on('all', (event, path) => {
+      this.log.trace('Changed detected, rebuilding', path)
+
+      let output = this._watchPaths[path]
+      this.bundle(path, output)
+    })
   }
 
   _defaultConfig() {
@@ -216,17 +243,16 @@ class ClientJS extends NxusModule {
 
   _establishRoute(route, path) {
     fs.ensureDirSync(path) //create directory if it doesn't exist
-    if (!(path in this._outputPaths)) {
+    if (!_.contains(_.keys(this._outputPaths), path)) {
       router.staticRoute(route, path)
     }
   }
 
   _webpackConfig(entry, outputPath, outputFilename) {
-
     var opts = {
       rootDir: process.cwd(),
       devBuild: process.env.NODE_ENV !== 'production',
-      outputFilename
+      output: path.join(outputPath, outputFilename)
     };
 
     mkdirp(path.join(opts.rootDir, '.tmp/cache'))
@@ -255,7 +281,7 @@ class ClientJS extends NxusModule {
         })
       ],
       devtool: sourceMap ? sourceMap : false,
-      watch: this.config.watchify,
+      //watch: this.config.watchify,
       resolve: {
         modules: [
           "node_modules",
@@ -335,6 +361,7 @@ class ClientJS extends NxusModule {
    * @param  {[type]} output the output path to use in the browser to access the bundled source
    */
   bundle(entry, output) {
+    this._watchPaths[entry] = output
     this.log.debug('Bundling', entry, "to", output)
 
     let outputDir = path.dirname(output)
@@ -348,7 +375,7 @@ class ClientJS extends NxusModule {
     var outputFile = this.config.assetFolder+output
     var outputFilename = path.basename(outputFile)
 
-    let promise = this._outputPaths[outputFile]
+    let promise //= this._outputPaths[outputFile]
     if (!promise) {
       promise = new Promise((resolve, reject) => {
         var options = this._webpackConfig(entry, outputPath, outputFilename)
