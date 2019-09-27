@@ -128,7 +128,7 @@ class ClientJS extends NxusModule {
         resolve()
       })
     }).then(::this._buildingWhenReady)
-    .then(::this._setupWatcher)
+    //.then(::this._setupWatcher)
     if (this.config.buildOnly) {
       this.readyToBuild.then(::app.stop).then(::process.exit)
     } else {
@@ -281,7 +281,7 @@ class ClientJS extends NxusModule {
         })
       ],
       devtool: sourceMap ? sourceMap : false,
-      //watch: this.config.watchify,
+      watch: this.config.watchify,
       resolve: {
         modules: [
           "node_modules",
@@ -375,7 +375,7 @@ class ClientJS extends NxusModule {
     var outputFile = this.config.assetFolder+output
     var outputFilename = path.basename(outputFile)
 
-    let promise //= this._outputPaths[outputFile]
+    let promise = this._outputPaths[outputFile]
     if (!promise) {
       promise = new Promise((resolve, reject) => {
         var options = this._webpackConfig(entry, outputPath, outputFilename)
