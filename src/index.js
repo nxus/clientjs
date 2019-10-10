@@ -132,7 +132,7 @@ class ClientJS extends NxusModule {
     }).then(::this._buildingWhenReady)
     //.then(::this._setupWatcher)
     if (this.config.buildOnly) {
-      this.readyToBuild.then(::app.stop).then(::process.exit)
+      //this.readyToBuild.then(::app.stop).then(::process.exit)
     } else {
       this._establishRoute(this.config.routePrefix, this.config.assetFolder)
     }
@@ -240,8 +240,8 @@ class ClientJS extends NxusModule {
     this.log.trace('Adding script to template bundle', templateName, script)
     if(!this._scriptBundles[templateName]) {
       this._scriptBundles[templateName] = [script]
-      this._buildWhenReady(() => {
-        this.bundle(this._scriptBundles[templateName], templateName+'.js')
+      return this._buildWhenReady(() => {
+        return this.bundle(this._scriptBundles[templateName], templateName+'.js')
       })
     } else {
       this._scriptBundles[templateName].push(script)
@@ -432,9 +432,8 @@ class ClientJS extends NxusModule {
           resolve()
         })
       })
-      this._establishRoute(outputRoute, outputPath)
+      if (!this.config.buildOnly) this._establishRoute(outputRoute, outputPath)
       this._outputPaths[outputFile] = promise
-
     }
     return promise
   }
