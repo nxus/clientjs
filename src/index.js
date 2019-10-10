@@ -117,6 +117,8 @@ class ClientJS extends NxusModule {
     this._outputPaths = {}
     this._watchPaths = {}
 
+    this._scriptBundles = {}
+
     if(_.isEmpty(this.config.babel))
       this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
     this.config.babel.cacheDirectory = true
@@ -200,6 +202,7 @@ class ClientJS extends NxusModule {
    * @param  {[type]} script       the path of the script file to include
    */
   includeScript(templateName, script) {
+    if(!templateName || !templateName.length) return this.log.error('No template name specified', script)
     let scriptName = path.basename(script)
     let outputPath = scriptName
 
@@ -216,7 +219,11 @@ class ClientJS extends NxusModule {
       ]
     }
 
-    let scripts = [path.join(this.config.routePrefix,outputPath)]
+    let scripts = [
+      path.join(this.config.routePrefix,templateName+'.js'),
+      path.join(this.config.routePrefix,'main.'+templateName+'.js'),
+      path.join(this.config.routePrefix,'vendors.'+templateName+'.js')
+    ]
 
     templater.on('renderContext.'+templateName, () => {
       return {
@@ -226,9 +233,19 @@ class ClientJS extends NxusModule {
       }
     })
 
-    this._buildWhenReady(() => {
-      return this.bundle(script, outputPath)
-    })
+    return this._bundleByTemplate(templateName, script)
+  }
+
+  _bundleByTemplate(templateName, script) {
+    this.log.trace('Adding script to template bundle', templateName, script)
+    if(!this._scriptBundles[templateName]) {
+      this._scriptBundles[templateName] = [script]
+      this._buildWhenReady(() => {
+        this.bundle(this._scriptBundles[templateName], templateName+'.js')
+      })
+    } else {
+      this._scriptBundles[templateName].push(script)
+    }
   }
 
   /**
@@ -268,17 +285,14 @@ class ClientJS extends NxusModule {
     }
 
     var options = {
-      entry: path.resolve(entry),
+      entry: _.isArray(entry) ? entry.map(e => path.resolve(e)) : path.resolve(entry),
       output: {
-        filename: outputFilename,
+        filename: outputFilename,//'[contenthash].'+outputFilename,
         path: outputPath
       },
       mode: app.config.NODE_ENV,
       plugins: [
-        new OnlyIfChangedPlugin({
-          cacheDirectory: path.join(opts.rootDir, '.tmp/cache'),
-          cacheIdentifier: opts, // all variable opts/environment should be used in cache key
-        })
+
       ],
       devtool: sourceMap ? sourceMap : false,
       watch: this.config.watchify,
@@ -291,6 +305,20 @@ class ClientJS extends NxusModule {
           "package.json",
           "bower.json"
         ]
+      },
+      optimization: {
+        namedChunks: true,
+        runtimeChunk: 'single',
+        moduleIds: 'hashed',
+        splitChunks: {
+          cacheGroups: {
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'vendors',
+              chunks: 'all',
+            },
+          },
+        },
       },
       module: {
         rules: [
