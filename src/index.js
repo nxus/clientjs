@@ -132,7 +132,7 @@ class ClientJS extends NxusModule {
     }).then(::this._buildingWhenReady)
     //.then(::this._setupWatcher)
     if (this.config.buildOnly) {
-      //this.readyToBuild.then(::app.stop).then(::process.exit)
+      this.readyToBuild.then(::app.stop).then(::process.exit)
     } else {
       this._establishRoute(this.config.routePrefix, this.config.assetFolder)
     }
