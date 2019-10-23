@@ -256,7 +256,7 @@ class ClientJS extends NxusModule {
         filename: outputFilename,
         path: outputPath
       },
-      mode: app.config.NODE_ENV,
+      mode: app.config.NODE_ENV || 'production',
       plugins: [
         new OnlyIfChangedPlugin({
           cacheDirectory: path.join(opts.rootDir, '.tmp/cache'),
