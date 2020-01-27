@@ -46,7 +46,7 @@ import mkdirp from 'mkdirp'
  *         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts
  *       }
  *
- *   'buildOnly' config option DEPRECATED: use `--exitAfter=build` cmdline instead.
+ *   'buildOnly' config option DEPRECATED: use `nxus_exitAfter=build` cmdline instead.
  * 
  * ## Usage
  *
