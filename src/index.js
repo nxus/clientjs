@@ -43,10 +43,11 @@ import mkdirp from 'mkdirp'
  *         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
  *         'webcomponentsURL': 'js/wc-min.js', // URL to include for WC polyfill
  *         'buildNone': false, // For production, to skip any bundling if pre-building during deploy
- *         'buildOnly': false, // For building during deploy scripts
  *         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts
  *       }
  *
+ *   'buildOnly' config option DEPRECATED: use `--exitAfter=build` cmdline instead.
+ * 
  * ## Usage
  *
  * ClientJS currently supports bundling scripts from a JS file entry point or Polymer web components
@@ -109,26 +110,20 @@ import mkdirp from 'mkdirp'
  * ```
  */
 class ClientJS extends NxusModule {
-  constructor () {
+  constructor() {
     super()
     this._outputPaths = {}
+    this._builders = []
 
     if(_.isEmpty(this.config.babel))
       this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
     this.config.babel.cacheDirectory = true
+
     this._fromConfigBundles(app)
 
-    this._builders = []
-    this.readyToBuild = new Promise((resolve, reject) => {
-      app.on('launch', () => {
-        resolve()
-      })
-    }).then(::this._buildingWhenReady)
-    if (this.config.buildOnly) {
-      this.readyToBuild.then(::app.stop).then(::process.exit)
-    } else {
-      this._establishRoute(this.config.routePrefix, this.config.assetFolder)
-    }
+    app.on('build', ::this._buildingWhenReady)
+
+    this._establishRoute(this.config.routePrefix, this.config.assetFolder)
   }
 
   _defaultConfig() {
@@ -151,8 +146,8 @@ class ClientJS extends NxusModule {
   _fromConfigBundles(app) {
     for (let entry in this.config.entries) {
       let output = this.config.entries[entry]
-      app.once('launch', () => {
-        this.bundle(entry, output)
+      this._buildWhenReady(() => {
+        return this.bundle(entry, output)
       })
     }
   }

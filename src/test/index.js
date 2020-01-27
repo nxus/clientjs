@@ -37,17 +37,7 @@ function makeClientJS(config) {
   // if (config) app.config['client_js'] = Object.assign({}, app.config['client_js'], config)
   return new ClientJS()
 }
-
-/* Emits lifecycle event.
- * Returns a promise that can be used to wait until after event.
- */
-function emitLifecycleEvent(event) {
-  app.emit(event)
-  return new Promise((resolve, reject) => {
-    app.onceAfter(event, (results) => { resolve() })
-  })
-}
-
+ 
 
 function trimExt(p) {
   return p.substring(0, p.length - path.posix.extname(p).length)
@@ -119,9 +109,7 @@ describe('ClientJS', function () {
       for (let entry in configEntries)
         clearOutputData(configEntries[entry], Object.keys(configRefs[entry]))
       clientjs = makeClientJS({entries: configEntries})
-      emitLifecycleEvent('launch')
-      return Promise.delay(2000)
-        // there's no way to await completion of the build, so we just delay for a while
+      return app.emit('build')
     })
 
     it('should be instantiated', () => {
@@ -138,7 +126,8 @@ describe('ClientJS', function () {
       clientjs.config.babel.should.deep.equal(Object.assign({cacheDirectory: true}, configBabel))
     })
 
-    it('should provide asset routes', ()=> {
+    it('should provide asset routes for default and for config entries', ()=> {
+      router.staticRoute.calledWith('/assets/clientjs').should.be.true
       router.staticRoute.calledWith('/assets/clientjs/test/apps').should.be.true
     })
 
@@ -154,7 +143,7 @@ describe('ClientJS', function () {
 
     before(() => {
       clientjs = makeClientJS()
-      emitLifecycleEvent('launch')
+      app.emit('build')
       return Promise.delay(2000)
         // there's no way to await completion of the build, so we just delay for a while
       .then(() => {
@@ -206,8 +195,8 @@ describe('ClientJS', function () {
       clearOutputData(output, Object.keys(scriptRefs[entry]))
       clientjs = makeClientJS()
       clientjs.includeScript('my-template', entry)
-      emitLifecycleEvent('launch')
-      return clientjs.readyToBuild // await completion of build (so we can check results)
+      
+      return app.emit('build')// await completion of build (so we can check results)
     })
 
     it('should call templater.on() and router.staticRoute()', ()=> {
@@ -232,8 +221,7 @@ describe('ClientJS', function () {
       clientjs = makeClientJS()
       for (let template of templates)
         clientjs.includeComponent(template, entry)
-      emitLifecycleEvent('launch')
-      return clientjs.readyToBuild // await completion of build (so we can check results)
+      return app.emit('build') // await completion of build (so we can check results)
     })
 
     it('should call templater.on()', ()=> {
@@ -257,8 +245,7 @@ describe('ClientJS', function () {
     
     it('should reject with error', () => {
       clientjs.includeComponent('my-template', entry)
-      emitLifecycleEvent('launch')
-      return clientjs.readyToBuild.should.be.rejectedWith(Error)
+      return clientjs._buildingWhenReady().should.be.rejectedWith(Error)
     })
 
     it('should not create transformed component', () => {

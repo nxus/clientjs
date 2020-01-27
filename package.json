@@ -37,7 +37,7 @@
     "fs-extra": "^3.0.1",
     "imports-loader": "^0.7.1",
     "morph": "^0.2.0",
-    "nxus-core": "^4.0.0",
+    "nxus-core": "https://github.com/nxus/core.git#feature/boot-stages-build-connect",
     "nxus-router": "^4.0.0",
     "nxus-templater": "^4.0.0",
     "only-if-changed-webpack-plugin": "https://github.com/vhadianto/only-if-changed-webpack-plugin.git",
