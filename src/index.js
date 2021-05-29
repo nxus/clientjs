@@ -112,6 +112,7 @@ class ClientJS extends NxusModule {
   constructor () {
     super()
     this._outputPaths = {}
+    this._establishedRoutes = {}
 
     if(_.isEmpty(this.config.babel))
       this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
@@ -215,9 +216,10 @@ class ClientJS extends NxusModule {
   }
 
   _establishRoute(route, path) {
-    fs.ensureDirSync(path) //create directory if it doesn't exist
-    if (!(path in this._outputPaths)) {
+    if (!(route in this._establishedRoutes)) {
+      fs.ensureDirSync(path) //create directory if it doesn't exist
       router.staticRoute(route, path)
+      this._establishedRoutes[route] = path
     }
   }
 
