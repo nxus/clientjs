@@ -120,6 +120,8 @@ class ClientJS extends NxusModule {
     this._fromConfigBundles(app)
 
     this._builders = []
+    this._singleBundleScripts = []
+    this._singleBundleName = 'app.js'
     this.readyToBuild = new Promise((resolve, reject) => {
       app.on('launch', () => {
         resolve()
@@ -142,6 +144,7 @@ class ClientJS extends NxusModule {
       assetFolder: '.tmp/clientjs',
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
       entries: {},
+      singleBundle: false,
       sourceMap: app.config.NODE_ENV != 'production' ? 'cheap-module-eval-source-map' : false,
       buildSeries: false,
       buildOnly: false,
@@ -166,6 +169,11 @@ class ClientJS extends NxusModule {
     if (this.config.buildNone) return
     let op = this.config.buildSeries ? Promise.mapSeries : Promise.map
     return op(this._builders, (x) => {return x()})
+      .then(() => {
+        if (this._singleBundleScripts.length > 0) {
+          return this._bundle(this._singleBundleScripts, this._singleBundleName)
+        }
+      })
   }
 
   /**
@@ -190,7 +198,8 @@ class ClientJS extends NxusModule {
       ]
     }
 
-    let scripts = [path.join(this.config.routePrefix,outputPath)]
+    let scripts = [path.join(this.config.routePrefix,
+                             (this.config.singleBundle ? this._singleBundleName : outputPath))]
 
     templater.on('renderContext.'+templateName, () => {
       return {
@@ -244,12 +253,12 @@ class ClientJS extends NxusModule {
     }
 
     var options = {
-      entry: path.resolve(entry),
+      entry: _.isArray(entry) ? _.uniq(entry.map(e => path.resolve(e))) : path.resolve(entry),
       output: {
         filename: outputFilename,
         path: outputPath
       },
-      mode: app.config.NODE_ENV,
+      mode: app.config.NODE_ENV || 'production',
       plugins: [
         new OnlyIfChangedPlugin({
           cacheDirectory: path.join(opts.rootDir, '.tmp/cache'),
@@ -337,6 +346,14 @@ class ClientJS extends NxusModule {
    * @param  {[type]} output the output path to use in the browser to access the bundled source
    */
   bundle(entry, output) {
+    if (this.config.singleBundle) {
+      this._singleBundleScripts.push(entry)
+    } else {
+      return this._bundle(entry, output)
+    }
+  }
+
+  _bundle(entry, output) {
     this.log.debug('Bundling', entry, "to", output)
 
     let outputDir = path.dirname(output)
