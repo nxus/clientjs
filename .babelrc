@@ -1,7 +1,9 @@
 {
-  "plugins": [
-    "transform-function-bind",
-    "transform-object-rest-spread",
-    "transform-es2015-modules-commonjs"
+  "presets": [
+    ["@babel/preset-env", {
+      "targets": {
+        "node": "10"
+      }
+    }]
   ]
 }
