@@ -11,6 +11,7 @@
     "postversion": "npm run build-docs && git push && git push --tags",
     "test": "NODE_ENV=test mocha --require @babel/register --reporter spec src/test",
     "compile": "rm -rf lib/; babel src --ignore src/test --out-dir lib",
+    "prepare": "npm run compile",
     "prepublish": "npm run compile",
     "postpublish": "npm run build-docs && npm run publish-docs",
     "build-docs": "NAME=\"${NAME:-$npm_package_name}\" VERSION=\"${VERSION:-$npm_package_version}\" && documentation readme ./src/index.js --project-name ${NAME} --project-version ${VERSION} --section ${NAME} --format md --markdown-toc false",
