@@ -2,7 +2,7 @@
   "name": "nxus-clientjs",
   "version": "4.2.0",
   "description": "Client JS compilation for Nxus applications",
-  "main": "lib/",
+  "main": "lib/index.js",
   "engines": {
     "node": ">=16.0.0"
   },
