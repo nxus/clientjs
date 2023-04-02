@@ -1,22 +1,15 @@
 'use strict'
 
-import Promise from 'bluebird'
 import webpack from 'webpack'
-import UglifyJsPlugin from 'uglifyjs-webpack-plugin'
 import path from 'path'
-import fs from 'fs-extra'
+import fs from 'fs'
 import _ from 'underscore'
-import morph from 'morph'
 import traverse from 'traverse'
-import combineLoaders from 'webpack-combine-loaders'
-import OnlyIfChangedPlugin from 'only-if-changed-webpack-plugin'
 
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
 
 import {application as app, NxusModule} from 'nxus-core'
-
-import mkdirp from 'mkdirp'
 
 /**
  *
@@ -35,7 +28,7 @@ import mkdirp from 'mkdirp'
  *       'client_js': {
  *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file options
  *         'watchify': true, // Whether to have webpack watch for changes - add your js to .nxusrc 'ignore' if so
- *         'minify': true, // Whether to have webpack minify output
+ *         'minify': undefined, // Whether to have webpack minify output
  *         'sourceMap': 'cheap-module-eval-source-map', // Sourcemap devtool option for webpack
  *         'webpackConfig': {}, // Additional webpack config, merged with default.
  *         'appendRulesConfig': false, // should webpack config rules be merged or replace the default
@@ -46,6 +39,14 @@ import mkdirp from 'mkdirp'
  *         'buildOnly': false, // For building during deploy scripts
  *         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts
  *       }
+ *
+ * ## Version Compatibilities
+ *
+ * ClientJS works with Webpack v5, Babel v7 and Node.js v16.
+ *
+ * It should be possible to get it to work with Node.js >=14.15.0
+ * (a `babel-loader` requirement) and npm v7 (there's an npm v6 bug
+ * that causes problems with Webpack).
  *
  * ## Usage
  *
@@ -89,24 +90,17 @@ import mkdirp from 'mkdirp'
  * in your application, and add Babel configuration options to the
  * `clientjs` section of your `.nxusrc` file. For example:
  *
- * ```javascript
- *     npm install --save babel-preset-es2015 \
- *       babel-plugin-transform-function-bind \
- *       babel-plugin-transform-object-rest-spread
- * ```
+ *     npm install --save @babel/preset-env
+ *     npm install --save @babel/plugin-proposal-function-bind
  *
- * ```
  *     "client_js": {
- *         ...
+ *       ...
  *       "babel": {
- *         "presets": [ "es2015" ],
- *         "plugins": [
- *           "transform-function-bind",
- *           "transform-object-rest-spread"
- *         ]
+ *         "presets": [ "@babel/preset-env" ],
+ *         "plugins": [ "@babel/plugin-proposal-function-bind" ]
  *       }
  *     }
- * ```
+ *
  */
 class ClientJS extends NxusModule {
   constructor () {
@@ -114,7 +108,7 @@ class ClientJS extends NxusModule {
     this._outputPaths = {}
     this._establishedRoutes = {}
 
-    if(_.isEmpty(this.config.babel))
+    if (_.isEmpty(this.config.babel))
       this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
     this.config.babel.cacheDirectory = true
     this._fromConfigBundles(app)
@@ -124,10 +118,11 @@ class ClientJS extends NxusModule {
       app.on('launch', () => {
         resolve()
       })
-    }).then(::this._buildingWhenReady)
+    }).then(this._buildingWhenReady.bind(this))
     if (this.config.buildOnly) {
-      this.readyToBuild.then(::app.stop).then(::process.exit)
-    } else {
+      this.readyToBuild.then(app.stop.bind(app)).then(process.exit.bind(process))
+    }
+    else {
       this._establishRoute(this.config.routePrefix, this.config.assetFolder)
     }
   }
@@ -135,14 +130,14 @@ class ClientJS extends NxusModule {
   _defaultConfig() {
     return {
       watchify: true,
-      minify: app.config.NODE_ENV == 'production',
+      minify: undefined,
       webpackConfig: {},
       appendRulesConfig: false,
       routePrefix: '/assets/clientjs',
       assetFolder: '.tmp/clientjs',
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
       entries: {},
-      sourceMap: app.config.NODE_ENV != 'production' ? 'cheap-module-eval-source-map' : false,
+      sourceMap: app.config.NODE_ENV != 'production' ? 'eval-cheap-module-source-map' : false,
       buildSeries: false,
       buildOnly: false,
       buildNone: false
@@ -190,7 +185,7 @@ class ClientJS extends NxusModule {
       ]
     }
 
-    let scripts = [path.join(this.config.routePrefix,outputPath)]
+    let scripts = [path.join(this.config.routePrefix, outputPath)]
 
     templater.on('renderContext.'+templateName, () => {
       return {
@@ -217,22 +212,22 @@ class ClientJS extends NxusModule {
 
   _establishRoute(route, path) {
     if (!(route in this._establishedRoutes)) {
-      fs.ensureDirSync(path) //create directory if it doesn't exist
+      fs.mkdirSync(path, {recursive: true}) // create directory if it doesn't exist
       router.staticRoute(route, path)
       this._establishedRoutes[route] = path
     }
   }
 
   _webpackConfig(entry, outputPath, outputFilename) {
+    const modes = ['development', 'production', 'none']
 
-    var opts = {
+    let opts = {
       rootDir: process.cwd(),
       devBuild: process.env.NODE_ENV !== 'production',
       outputFilename
-    };
+    }
 
-    mkdirp(path.join(opts.rootDir, '.tmp/cache'))
-    var sourceMap = this.config.sourceMap
+    fs.mkdirSync(path.join(opts.rootDir, '.tmp/cache'), {recursive: true})
 
     let polymerLoader = {
       loader: 'polymer-webpack-loader',
@@ -243,20 +238,13 @@ class ClientJS extends NxusModule {
       }
     }
 
-    var options = {
-      entry: path.resolve(entry),
+    let options = {
+      entry: Array.isArray(entry) ? entry.map(e => path.resolve(e)) : path.resolve(entry),
       output: {
         filename: outputFilename,
         path: outputPath
       },
-      mode: app.config.NODE_ENV,
-      plugins: [
-        new OnlyIfChangedPlugin({
-          cacheDirectory: path.join(opts.rootDir, '.tmp/cache'),
-          cacheIdentifier: opts, // all variable opts/environment should be used in cache key
-        })
-      ],
-      devtool: sourceMap ? sourceMap : false,
+      mode: modes.find(mode => mode.startsWith(app.config.NODE_ENV)) || 'none',
       watch: this.config.watchify,
       resolve: {
         modules: [
@@ -284,7 +272,7 @@ class ClientJS extends NxusModule {
           },
           {
             test: /\.css$/,
-            use:['style-loader','css-loader']
+            use:['style-loader', 'css-loader']
           },
           // web components that do not need babel
           {
@@ -305,18 +293,15 @@ class ClientJS extends NxusModule {
         ]
       }
     }
-    if (this.config.minify) {
-      options.plugins.unshift(
-        new UglifyJsPlugin({
-          sourceMap: sourceMap ? true : false
-        })
-      )
-    }
+    if (this.config.sourceMap)
+      options.devtool = this.config.sourceMap
+    if (this.config.minify !== undefined) // default is to use default Webpack behavior
+      options.optimization = { minimize: this.config.minify }
     if (this.config.webpackConfig) {
       let localConfig = Object.assign({}, this.config.webpackConfig)
       // hydrate regexps from json config
       traverse(localConfig).forEach(function(n) {
-        if (_.isString(n) && n.substring(0,1) == "/" && n.substring(-1, 1) == "/") {
+        if ((typeof n === 'string') && n.substring(0, 1) == "/" && n.substring(-1, 1) == "/") {
           this.update(new RegExp(n.substring(1, n.length-1)))
         }
       })
@@ -335,6 +320,7 @@ class ClientJS extends NxusModule {
    * Create a clientjs bundle that can be injected into a rendered page.
    * @param  {[type]} entry  the source file to bundle
    * @param  {[type]} output the output path to use in the browser to access the bundled source
+   * @return {Promise} promise that resolves when bundling is completed
    */
   bundle(entry, output) {
     this.log.debug('Bundling', entry, "to", output)
@@ -344,16 +330,16 @@ class ClientJS extends NxusModule {
       outputDir = ''
     }
 
-    if(output && output[0] != '/') output = '/'+output //add prepending slash if not set
-    var outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
-    var outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
-    var outputFile = this.config.assetFolder+output
-    var outputFilename = path.basename(outputFile)
+    if (output && output[0] != '/') output = '/'+output // add prepending slash if not set
+    let outputRoute = this.config.routePrefix+path.dirname(output) // combine the routePrefix with output path
+    let outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
+    let outputFile = this.config.assetFolder+output
+    let outputFilename = path.basename(outputFile)
 
     let promise = this._outputPaths[outputFile]
     if (!promise) {
       promise = new Promise((resolve, reject) => {
-        var options = this._webpackConfig(entry, outputPath, outputFilename)
+        let options = this._webpackConfig(entry, outputPath, outputFilename)
         webpack(options, (err, stats) => {
           if (err) {
             this.log.error(`Bundle error for ${entry}`, err)
@@ -366,7 +352,8 @@ class ClientJS extends NxusModule {
             try {
               let fstat = fs.lstatSync(outputFile)
               if (fstat.isFile()) fs.unlinkSync(outputFile)
-            } catch (e) {
+            }
+            catch (e) {
               if (e.code !== 'ENOENT') throw e
             }
             reject(new Error(info.errors.toString()))
@@ -388,6 +375,6 @@ class ClientJS extends NxusModule {
 }
 
 
-var clientjs = ClientJS.getProxy()
+let clientjs = ClientJS.getProxy()
 
 export {ClientJS as default, clientjs}

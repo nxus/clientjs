@@ -20,7 +20,7 @@ the processed file available via a static route.
       'client_js': {
         'babel': {}, // Babel specific options. Defaults to the project .babelrc file options
         'watchify': true, // Whether to have webpack watch for changes - add your js to .nxusrc 'ignore' if so
-        'minify': true, // Whether to have webpack minify output
+        'minify': undefined, // Whether to have webpack minify output
         'sourceMap': 'cheap-module-eval-source-map', // Sourcemap devtool option for webpack
         'webpackConfig': {}, // Additional webpack config, merged with default.
         'appendRulesConfig': false, // should webpack config rules be merged or replace the default
@@ -31,6 +31,14 @@ the processed file available via a static route.
         'buildOnly': false, // For building during deploy scripts
         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts
       }
+
+## Version Compatibilities
+
+ClientJS works with Webpack v5, Babel v7 and Node.js v16.
+
+It should be possible to get it to work with Node.js >=14.15.0
+(a `babel-loader` requirement) and npm v7 (there's an npm v6 bug
+that causes problems with Webpack).
 
 ## Usage
 
@@ -73,49 +81,44 @@ You will need to install the necessary Babel presets and plugins
 in your application, and add Babel configuration options to the
 `clientjs` section of your `.nxusrc` file. For example:
 
-```javascript
-    npm install --save babel-preset-es2015 \
-      babel-plugin-transform-function-bind \
-      babel-plugin-transform-object-rest-spread
-```
+    npm install --save @babel/preset-env
+    npm install --save @babel/plugin-proposal-function-bind
 
-        "client_js": {
-            ...
-          "babel": {
-            "presets": [ "es2015" ],
-            "plugins": [
-              "transform-function-bind",
-              "transform-object-rest-spread"
-            ]
-          }
-        }
+    "client_js": {
+      ...
+      "babel": {
+        "presets": [ "@babel/preset-env" ],
+        "plugins": [ "@babel/plugin-proposal-function-bind" ]
+      }
+    }
 
 ### includeScript
 
 Injects the passed script entry into to the specified template after webpack/babel
 
-**Parameters**
+#### Parameters
 
--   `templateName` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** the name of the template to include the script into
--   `script` **\[type]** the path of the script file to include
+*   `templateName` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** the name of the template to include the script into
+*   `script` **\[type]** the path of the script file to include
 
 ### includeComponent
 
-**Parameters**
+#### Parameters
 
--   `templateName` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** the name of the template to include the script into
--   `script` **\[type]** the path of the component file to include
+*   `templateName` **[String](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/String)** the name of the template to include the script into
+*   `script` **\[type]** the path of the component file to include
 
 **Meta**
 
--   **deprecated**: (Deprecated, includeScript now handles this.) Injects the passed web component entry into to the specified template after bundling/babel
-
+*   **deprecated**: (Deprecated, includeScript now handles this.) Injects the passed web component entry into to the specified template after bundling/babel
 
 ### bundle
 
 Create a clientjs bundle that can be injected into a rendered page.
 
-**Parameters**
+#### Parameters
 
--   `entry` **\[type]** the source file to bundle
--   `output` **\[type]** the output path to use in the browser to access the bundled source
+*   `entry` **\[type]** the source file to bundle
+*   `output` **\[type]** the output path to use in the browser to access the bundled source
+
+Returns **[Promise](https://developer.mozilla.org/docs/Web/JavaScript/Reference/Global_Objects/Promise)** promise that resolves when bundling is completed
