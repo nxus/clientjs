@@ -14,7 +14,7 @@ import {application as app} from 'nxus-core'
 import {router} from 'nxus-router'
 import {templater} from 'nxus-templater'
 
-const configBabel = { presets: [ 'es2015' ] }
+const configBabel = { presets: [ '@babel/preset-env' ] }
 const configEntries = {
   'src/test/apps/one.js': 'test/apps/one-bundled.js', // (in .tmp/clientjs/)
   'src/test/apps/two.js': 'test/apps/two-bundled.js'  // (in .tmp/clientjs/)
