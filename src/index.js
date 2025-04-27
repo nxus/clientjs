@@ -145,29 +145,33 @@ class ClientJS extends NxusModule {
    * @param  {[type]} script       the path of the script file to include
    */
   includeScript(templateName, script) {
-    // Use the template name as the output file name
-    const outputPath = templateName + '.js'
-    
-    // Initialize the entries array for this template if it doesn't exist
+    // Use the template name as the base for the output file name
+    const outputPath = templateName + '.js';
+    const fullOutputPath = path.join(this.config.routePrefix, outputPath);
+
+    // Initialize the entries array and register with templater ONCE per templateName
     if (!this._templateEntries[templateName]) {
-      this._templateEntries[templateName] = []
-      
-      // Register the scripts with the templater
-      const scripts = [path.join(this.config.routePrefix, outputPath)]
-      templater.on('renderContext.'+templateName, () => ({
+      this._templateEntries[templateName] = [];
+
+      // Register the script path with the templater using the final output path
+      // Note: You might need to adjust headScripts/imports if needed, similar to the original Polymer logic
+      templater.on('renderContext.' + templateName, () => ({
         headScripts: [],
-        scripts,
+        scripts: [fullOutputPath],
         imports: []
-      }))
+      }));
+
+      // Schedule the bundling ONCE per templateName, using bundleMultiple
+      // This ensures it runs after 'launch' with all collected scripts for this template
+      this._buildWhenReady(() => {
+        this.log.debug(`Queueing bundleMultiple for ${templateName} with entries:`, this._templateEntries[templateName]);
+        return this.bundleMultiple(this._templateEntries[templateName], outputPath);
+      });
     }
-    
-    // Add this script to the entries for this template
-    this._templateEntries[templateName].push(script)
-    
-    // Build all entries for this template into a single bundle
-    this._buildWhenReady(() => {
-      return this.bundleMultiple(this._templateEntries[templateName], outputPath)
-    })
+
+    // Add this script to the list of entries for this template name
+    // This happens every time includeScript is called for this templateName
+    this._templateEntries[templateName].push(script);
   }
 
   _establishRoute(route, path) {
