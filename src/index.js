@@ -19,7 +19,7 @@ const mkdirp = require('mkdirp')
  * [![Build Status](https://travis-ci.org/nxus/clientjs.svg?branch=master)](https://travis-ci.org/nxus/clientjs)
  *
  *
- * Compacts, processes and bundles code for inclusion in the browser.  Uses webpack and babel to process source files, and makes
+ * Compacts, processes and bundles code for inclusion in the browser. Uses webpack and babel to process source files, and makes
  * the processed file available via a static route.
  *
  * ## Installation
@@ -29,15 +29,15 @@ const mkdirp = require('mkdirp')
  * ## Configuration Options
  *
  *       'client_js': {
- *         'babel': {}, // Babel specific options. Defaults to the project .babelrc file options
- *         'watchify': true, // Whether to have webpack watch for changes - add your js to .nxusrc 'ignore' if so
+ *         'babel': {}, // Babel specific options
+ *         'watchify': true, // Whether to have webpack watch for changes
  *         'minify': true, // Whether to have webpack minify output
- *         'sourceMap': 'cheap-module-eval-source-map', // Sourcemap devtool option for webpack
- *         'webpackConfig': {}, // Additional webpack config, merged with default.
+ *         'sourceMap': 'source-map', // Sourcemap devtool option for webpack
+ *         'webpackConfig': {}, // Additional webpack config, merged with default
  *         'appendRulesConfig': false, // should webpack config rules be merged or replace the default
  *         'routePrefix': '/assets/clientjs', // static route used to serve compiled assets
  *         'assetFolder': '.tmp/clientjs', // local dir to write compiled scripts
- *         'webcomponentsURL': 'js/wc-min.js', // URL to include for WC polyfill
+ *         'webcomponentsURL': '/js/webcomponentsjs/webcomponents-lite.min.js', // URL for WC polyfill
  *         'buildNone': false, // For production, to skip any bundling if pre-building during deploy
  *         'buildOnly': false, // For building during deploy scripts
  *         'buildSeries': false // Whether to run bundle builds in series instead of parallel, for deploy scripts
@@ -45,9 +45,8 @@ const mkdirp = require('mkdirp')
  *
  * ## Usage
  *
- * ClientJS currently supports bundling scripts from a JS file entry point or Polymer web components
- * HTML file entry point using webpack. Both options will serve the resulting file from a temporary location
- * and process the results using babel if configured, and insert the necessary script tags for a given template.
+ * ClientJS supports bundling scripts using webpack and processing them with babel.
+ * The resulting file is served from a temporary location with the necessary script tags inserted for a given template.
  *
  *     app.get('clientjs').includeScript('my-template', __dirname+"/js/entry.js")
  *
@@ -58,51 +57,26 @@ const mkdirp = require('mkdirp')
  *
  *     app.get('clientjs').bundle('/my/local/file.js', '/path/to/serve/file.js')
  *
- * Serve the bundled path using `router.staticRoute`:
+ * The bundle will be accessible at the route prefix + output path in your browser.
  *
- *     app.get('router').staticRoute('/browser/path/to', '/path/to/serve')
+ * You can include the script in your template either manually:
  *
- * Then include/inject the source file:
+ *     <script src='/assets/clientjs/path/to/file.js'></script>
  *
- * You can either include the output path as specified when you creatd the bundle
+ * Or using Nxus Templater:
  *
- *     <script source='/browser/path/to/file.js'></script>
- *
- * Or using Nxus Templater, you can inject the script by passing the output path to the `script` key on render or using the Templater
- * lifecycle events.
- *
- *     app.get('templater').render('my-template', {scripts: ['/browser/path/to/file.js']})
+ *     app.get('templater').render('my-template', {scripts: ['/assets/clientjs/path/to/file.js']})
  *
  * Or
  *
  *     app.get('templater').on('renderContext.my-template', () => {
- *          return {scripts: ['/browser/path/to/file.js']}
+ *          return {scripts: ['/assets/clientjs/path/to/file.js']}
  *     })
  *
- * ### Using ClientJS with Babel transforms
+ * ### Using ClientJS with Babel
  *
- * You will need to install the necessary Babel presets and plugins
- * in your application, and add Babel configuration options to the
- * `clientjs` section of your `.nxusrc` file. For example:
- *
- * ```javascript
- *     npm install --save babel-preset-es2015 \
- *       babel-plugin-transform-function-bind \
- *       babel-plugin-transform-object-rest-spread
- * ```
- *
- * ```
- *     "client_js": {
- *         ...
- *       "babel": {
- *         "presets": [ "es2015" ],
- *         "plugins": [
- *           "transform-function-bind",
- *           "transform-object-rest-spread"
- *         ]
- *       }
- *     }
- * ```
+ * The default configuration includes babel-loader with @babel/preset-env.
+ * You can customize the Babel configuration through the webpackConfig option.
  */
 class ClientJS extends NxusModule {
   constructor () {
@@ -212,16 +186,29 @@ class ClientJS extends NxusModule {
         descriptionFiles: [
           "package.json",
           "bower.json"
-        ]
+        ],
+        extensions: ['.js', '.jsx', '.ts', '.tsx', '.json']
       },
       module: {
         rules: [
           {
-            test: /\.js$/,
+            test: /\.(js|jsx)$/,
             exclude: /(node_modules|bower_components)/,
             use: {
               loader: 'babel-loader',
-              options: { presets: ['@babel/preset-env'] }
+              options: { 
+                presets: ['@babel/preset-env', '@babel/preset-react']
+              }
+            }
+          },
+          {
+            test: /\.(ts|tsx)$/,
+            exclude: /(node_modules|bower_components)/,
+            use: {
+              loader: 'babel-loader',
+              options: { 
+                presets: ['@babel/preset-env', '@babel/preset-typescript', '@babel/preset-react']
+              }
             }
           }
         ]
