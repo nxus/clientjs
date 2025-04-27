@@ -57,7 +57,7 @@
     "@babel/register": "^7.0.0",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
-    "documentation": "^13.0.0",
+    "documentation": "^14.0.3",
     "mocha": "^8.1.0",
     "should": "^13.2.3",
     "sinon": "^9.0.0"
