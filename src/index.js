@@ -275,18 +275,32 @@ class ClientJS extends NxusModule {
           }
           const info = stats.toJson()
           if (stats.hasErrors()) {
-            this.log.error(`Bundle errors for ${entry}: ${info.errors}`)
+            const errorDetails = info.errors.map(error => {
+              return {
+                message: error.message,
+                moduleName: error.moduleName,
+                loc: error.loc
+              }
+            });
+            this.log.error(`Bundle errors for ${entry}:`, JSON.stringify(errorDetails, null, 2));
             try {
               const fstat = fs.lstatSync(outputFile)
               if (fstat.isFile()) fs.unlinkSync(outputFile)
             } catch (e) {
               if (e.code !== 'ENOENT') throw e
             }
-            reject(new Error(info.errors.toString()))
+            reject(new Error(JSON.stringify(errorDetails, null, 2)))
             return
           }
           if (stats.hasWarnings()) {
-            this.log.error(`Bundle warnings for ${entry}: ${info.warnings}`)
+            const warningDetails = info.warnings.map(warning => {
+              return {
+                message: warning.message,
+                moduleName: warning.moduleName,
+                loc: warning.loc
+              }
+            });
+            this.log.error(`Bundle warnings for ${entry}:`, JSON.stringify(warningDetails, null, 2));
           }
           this.log.debug(`Bundle for ${entry} written to ${outputFile}`)
           resolve()
