@@ -110,7 +110,8 @@ class ClientJS extends NxusModule {
       sourceMap: app.config.NODE_ENV !== 'production' ? 'source-map' : false,
       buildSeries: false,
       buildOnly: false,
-      buildNone: false
+      buildNone: false,
+      concurrentBuilds: app.config.NODE_ENV === 'production' ? 4 : 8
     }
   }
 
@@ -127,8 +128,13 @@ class ClientJS extends NxusModule {
 
   _buildingWhenReady() {
     if (this.config.buildNone) return
-    const op = this.config.buildSeries ? Promise.mapSeries : Promise.map
-    return op(this._builders, (x) => x())
+    
+    if (this.config.buildSeries) {
+      return Promise.mapSeries(this._builders, (x) => x())
+    } else {
+      // Limit concurrency to avoid overwhelming the system
+      return Promise.map(this._builders, (x) => x(), {concurrency: this.config.concurrentBuilds})
+    }
   }
 
   /**
@@ -168,6 +174,7 @@ class ClientJS extends NxusModule {
 
     mkdirp.sync(path.join(opts.rootDir, '.tmp/cache'))
     const sourceMap = this.config.sourceMap
+    const isDev = process.env.NODE_ENV !== 'production'
 
     let options = {
       entry: path.resolve(entry),
@@ -176,7 +183,7 @@ class ClientJS extends NxusModule {
         path: outputPath
       },
       mode: app.config.NODE_ENV,
-      devtool: sourceMap ? (typeof sourceMap === 'string' ? sourceMap : 'source-map') : false,
+      devtool: isDev ? 'eval-cheap-module-source-map' : (sourceMap ? (typeof sourceMap === 'string' ? sourceMap : 'source-map') : false),
       watch: this.config.watchify,
       resolve: {
         modules: [
@@ -194,22 +201,28 @@ class ClientJS extends NxusModule {
           {
             test: /\.(js|jsx)$/,
             exclude: /(node_modules|bower_components)/,
-            use: {
-              loader: 'babel-loader',
-              options: { 
-                presets: ['@babel/preset-env', '@babel/preset-react']
+            use: [
+              {
+                loader: 'babel-loader',
+                options: { 
+                  presets: ['@babel/preset-env', '@babel/preset-react'],
+                  cacheDirectory: true
+                }
               }
-            }
+            ]
           },
           {
             test: /\.(ts|tsx)$/,
             exclude: /(node_modules|bower_components)/,
-            use: {
-              loader: 'babel-loader',
-              options: { 
-                presets: ['@babel/preset-env', '@babel/preset-typescript', '@babel/preset-react']
+            use: [
+              {
+                loader: 'babel-loader',
+                options: { 
+                  presets: ['@babel/preset-env', '@babel/preset-typescript', '@babel/preset-react'],
+                  cacheDirectory: true
+                }
               }
-            }
+            ]
           },
           {
             test: /\.css$/,
@@ -219,7 +232,11 @@ class ClientJS extends NxusModule {
       },
       optimization: {
         minimize: this.config.minify,
-      }
+        removeAvailableModules: false,
+        removeEmptyChunks: false,
+        splitChunks: false,
+      },
+      performance: { hints: false }
     }
 
     if (this.config.webpackConfig) {
@@ -238,11 +255,20 @@ class ClientJS extends NxusModule {
       options = Object.assign(options, localConfig, moduleConfig)
     }
 
-    options.cache = {
-      type: 'filesystem',
-      buildDependencies: {
-        config: [__filename],
-      },
+    if (isDev) {
+      // Use memory cache in development for better performance
+      options.cache = {
+        type: 'memory'
+      };
+    } else {
+      // Use filesystem cache only in production
+      options.cache = {
+        type: 'filesystem',
+        buildDependencies: {
+          config: [__filename],
+        },
+        cacheDirectory: path.resolve(process.cwd(), '.webpack-cache')
+      };
     }
 
     return options
