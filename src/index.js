@@ -193,18 +193,20 @@ class ClientJS extends NxusModule {
     const sourceMap = this.config.sourceMap
     const isDev = process.env.NODE_ENV !== 'production'
 
-    // Handle either a single entry or multiple entries
-    const entryConfig = Array.isArray(entry) 
-      ? entry.reduce((obj, file, index) => {
-          obj[path.basename(file, path.extname(file))] = path.resolve(file);
-          return obj;
-        }, {})
-      : path.resolve(entry);
+    // Handle either a single entry string or an array of entries for bundleMultiple
+    let entryConfig;
+    if (Array.isArray(entry)) {
+      // For bundleMultiple: entry is an array of paths, output is single file
+      entryConfig = entry.map(file => path.resolve(file));
+    } else {
+      // For single bundle: entry is a single path string
+      entryConfig = path.resolve(entry);
+    }
 
     let options = {
-      entry: entryConfig,
+      entry: entryConfig, // Correctly set to array or string
       output: {
-        filename: outputFilename,
+        filename: outputFilename, // Single output filename (e.g., 'default.js')
         path: outputPath
       },
       mode: app.config.NODE_ENV,
@@ -230,7 +232,7 @@ class ClientJS extends NxusModule {
         minimize: false, // Always disable minification in development
         removeAvailableModules: false,
         removeEmptyChunks: false,
-        splitChunks: false,
+        splitChunks: false, // Explicitly disable chunk splitting for multiple entries
         runtimeChunk: false,
       },
       // Skip performance hints
