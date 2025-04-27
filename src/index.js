@@ -2,21 +2,17 @@
 
 import Promise from 'bluebird'
 import webpack from 'webpack'
-import UglifyJsPlugin from 'uglifyjs-webpack-plugin'
 import path from 'path'
 import fs from 'fs-extra'
 import _ from 'underscore'
-import morph from 'morph'
 import traverse from 'traverse'
-import combineLoaders from 'webpack-combine-loaders'
-import OnlyIfChangedPlugin from 'only-if-changed-webpack-plugin'
 
-import {router} from 'nxus-router'
-import {templater} from 'nxus-templater'
+const {router} = require('nxus-router')
+const {templater} = require('nxus-templater')
 
 import {application as app, NxusModule} from 'nxus-core'
 
-import mkdirp from 'mkdirp'
+const mkdirp = require('mkdirp')
 
 /**
  *
@@ -114,19 +110,14 @@ class ClientJS extends NxusModule {
     this._outputPaths = {}
     this._establishedRoutes = {}
 
-    if(_.isEmpty(this.config.babel))
-      this.config.babel = _.omit(require('rc')('babel', {}, {}), '_', 'config', 'configs')
-    this.config.babel.cacheDirectory = true
-    this._fromConfigBundles(app)
-
     this._builders = []
-    this.readyToBuild = new Promise((resolve, reject) => {
+    const readyToBuild = new Promise((resolve, reject) => {
       app.on('launch', () => {
         resolve()
       })
-    }).then(::this._buildingWhenReady)
+    }).then(this._buildingWhenReady.bind(this))
     if (this.config.buildOnly) {
-      this.readyToBuild.then(::app.stop).then(::process.exit)
+      readyToBuild.then(app.stop.bind(app)).then(process.exit.bind(process))
     } else {
       this._establishRoute(this.config.routePrefix, this.config.assetFolder)
     }
@@ -135,14 +126,14 @@ class ClientJS extends NxusModule {
   _defaultConfig() {
     return {
       watchify: true,
-      minify: app.config.NODE_ENV == 'production',
+      minify: app.config.NODE_ENV === 'production',
       webpackConfig: {},
       appendRulesConfig: false,
       routePrefix: '/assets/clientjs',
       assetFolder: '.tmp/clientjs',
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
       entries: {},
-      sourceMap: app.config.NODE_ENV != 'production' ? 'cheap-module-eval-source-map' : false,
+      sourceMap: app.config.NODE_ENV !== 'production' ? 'cheap-module-eval-source-map' : false,
       buildSeries: false,
       buildOnly: false,
       buildNone: false
@@ -152,9 +143,7 @@ class ClientJS extends NxusModule {
   _fromConfigBundles(app) {
     for (let entry in this.config.entries) {
       let output = this.config.entries[entry]
-      app.once('launch', () => {
-        this.bundle(entry, output)
-      })
+      app.once('launch', () => this.bundle(entry, output))
     }
   }
 
@@ -164,8 +153,8 @@ class ClientJS extends NxusModule {
 
   _buildingWhenReady() {
     if (this.config.buildNone) return
-    let op = this.config.buildSeries ? Promise.mapSeries : Promise.map
-    return op(this._builders, (x) => {return x()})
+    const op = this.config.buildSeries ? Promise.mapSeries : Promise.map
+    return op(this._builders, (x) => x())
   }
 
   /**
@@ -174,88 +163,45 @@ class ClientJS extends NxusModule {
    * @param  {[type]} script       the path of the script file to include
    */
   includeScript(templateName, script) {
-    let scriptName = path.basename(script)
+    const scriptName = path.basename(script)
     let outputPath = scriptName
 
-    let imports = [], headScripts = []
+    const scripts = [path.join(this.config.routePrefix,outputPath)]
 
-    if (script.slice(-4) == 'html') {
-      outputPath += ".js"
-      imports = []
-      for (let s in this.config.reincludeComponentScripts) {
-        imports.push(this.config.reincludeComponentScripts[s])
-      }
-      headScripts = [
-        this.config.webcomponentsURL,
-      ]
-    }
+    templater.on('renderContext.'+templateName, () => ({
+      headScripts: [],
+      scripts,
+      imports: []
+    }))
 
-    let scripts = [path.join(this.config.routePrefix,outputPath)]
-
-    templater.on('renderContext.'+templateName, () => {
-      return {
-        headScripts,
-        scripts,
-        imports
-      }
-    })
-
-    this._buildWhenReady(() => {
-      return this.bundle(script, outputPath)
-    })
-  }
-
-  /**
-   * @deprecated
-   * (Deprecated, includeScript now handles this.) Injects the passed web component entry into to the specified template after bundling/babel
-   * @param  {String} templateName the name of the template to include the script into
-   * @param  {[type]} script       the path of the component file to include
-   */
-  includeComponent(templateName, script) {
-    return this.includeScript(templateName, script)
+    this._buildWhenReady(() => this.bundle(script, outputPath))
   }
 
   _establishRoute(route, path) {
     if (!(route in this._establishedRoutes)) {
-      fs.ensureDirSync(path) //create directory if it doesn't exist
+      fs.ensureDirSync(path) // create directory if it doesn't exist
       router.staticRoute(route, path)
       this._establishedRoutes[route] = path
     }
   }
 
   _webpackConfig(entry, outputPath, outputFilename) {
-
-    var opts = {
+    const opts = {
       rootDir: process.cwd(),
       devBuild: process.env.NODE_ENV !== 'production',
       outputFilename
-    };
-
-    mkdirp(path.join(opts.rootDir, '.tmp/cache'))
-    var sourceMap = this.config.sourceMap
-
-    let polymerLoader = {
-      loader: 'polymer-webpack-loader',
-      options: {
-        htmlLoader: {
-          minimize: false
-        }
-      }
     }
 
-    var options = {
+    mkdirp.sync(path.join(opts.rootDir, '.tmp/cache'))
+    const sourceMap = this.config.sourceMap
+
+    let options = {
       entry: path.resolve(entry),
       output: {
         filename: outputFilename,
         path: outputPath
       },
       mode: app.config.NODE_ENV,
-      plugins: [
-        new OnlyIfChangedPlugin({
-          cacheDirectory: path.join(opts.rootDir, '.tmp/cache'),
-          cacheIdentifier: opts, // all variable opts/environment should be used in cache key
-        })
-      ],
       devtool: sourceMap ? sourceMap : false,
       watch: this.config.watchify,
       resolve: {
@@ -270,50 +216,23 @@ class ClientJS extends NxusModule {
       },
       module: {
         rules: [
-          // web components that need babel
-          {
-            test: /\.html$/,
-            exclude: /(node_modules|bower_components)/,
-            use: [
-              {
-                loader: 'babel-loader',
-                options: this.config.babel
-              },
-              polymerLoader
-            ]
-          },
-          {
-            test: /\.css$/,
-            use:['style-loader','css-loader']
-          },
-          // web components that do not need babel
-          {
-            test: /\.html$/,
-            include: /(node_modules|bower_components)/,
-            use: [
-              polymerLoader
-            ]
-          },
           {
             test: /\.js$/,
             exclude: /(node_modules|bower_components)/,
             use: {
               loader: 'babel-loader',
-              options: this.config.babel
+              options: { presets: ['@babel/preset-env'] }
             }
           }
         ]
+      },
+      optimization: {
+        minimize: this.config.minify,
       }
     }
-    if (this.config.minify) {
-      options.plugins.unshift(
-        new UglifyJsPlugin({
-          sourceMap: sourceMap ? true : false
-        })
-      )
-    }
+
     if (this.config.webpackConfig) {
-      let localConfig = Object.assign({}, this.config.webpackConfig)
+      const localConfig = Object.assign({}, this.config.webpackConfig)
       // hydrate regexps from json config
       traverse(localConfig).forEach(function(n) {
         if (_.isString(n) && n.substring(0,1) == "/" && n.substring(-1, 1) == "/") {
@@ -321,11 +240,18 @@ class ClientJS extends NxusModule {
         }
       })
       // special case module.rules update
-      let moduleConfig = {}
+      const moduleConfig = {}
       if (this.config.appendRulesConfig && localConfig.module && localConfig.module.rules) {
         moduleConfig.module = {rules: localConfig.module.rules.concat(options.module.rules)}
       }
       options = Object.assign(options, localConfig, moduleConfig)
+    }
+
+    options.cache = {
+      type: 'filesystem',
+      buildDependencies: {
+        config: [__filename],
+      },
     }
 
     return options
@@ -339,32 +265,32 @@ class ClientJS extends NxusModule {
   bundle(entry, output) {
     this.log.debug('Bundling', entry, "to", output)
 
-    let outputDir = path.dirname(output)
-    if (outputDir == '.') {
-      outputDir = ''
+    const outputDir = path.dirname(output)
+    if (outputDir === '.') {
+      // outputDir = '' // This line seems unnecessary based on the original logic.
     }
 
-    if(output && output[0] != '/') output = '/'+output //add prepending slash if not set
-    var outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
-    var outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
-    var outputFile = this.config.assetFolder+output
-    var outputFilename = path.basename(outputFile)
+    if(output && output[0] !== '/') output = '/'+output //add prepending slash if not set
+    const outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
+    const outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
+    const outputFile = this.config.assetFolder+output
+    const outputFilename = path.basename(outputFile)
 
     let promise = this._outputPaths[outputFile]
     if (!promise) {
       promise = new Promise((resolve, reject) => {
-        var options = this._webpackConfig(entry, outputPath, outputFilename)
+        const options = this._webpackConfig(entry, outputPath, outputFilename)
         webpack(options, (err, stats) => {
           if (err) {
             this.log.error(`Bundle error for ${entry}`, err)
             reject(err)
             return
           }
-          let info = stats.toJson()
+          const info = stats.toJson()
           if (stats.hasErrors()) {
             this.log.error(`Bundle errors for ${entry}: ${info.errors}`)
             try {
-              let fstat = fs.lstatSync(outputFile)
+              const fstat = fs.lstatSync(outputFile)
               if (fstat.isFile()) fs.unlinkSync(outputFile)
             } catch (e) {
               if (e.code !== 'ENOENT') throw e
