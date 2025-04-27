@@ -83,6 +83,7 @@ class ClientJS extends NxusModule {
     super()
     this._outputPaths = {}
     this._establishedRoutes = {}
+    this._templateEntries = {} // Track scripts per template
 
     this._builders = []
     const readyToBuild = new Promise((resolve, reject) => {
@@ -144,18 +145,29 @@ class ClientJS extends NxusModule {
    * @param  {[type]} script       the path of the script file to include
    */
   includeScript(templateName, script) {
-    const scriptName = path.basename(script)
-    let outputPath = scriptName
-
-    const scripts = [path.join(this.config.routePrefix,outputPath)]
-
-    templater.on('renderContext.'+templateName, () => ({
-      headScripts: [],
-      scripts,
-      imports: []
-    }))
-
-    this._buildWhenReady(() => this.bundle(script, outputPath))
+    // Use the template name as the output file name
+    const outputPath = templateName + '.js'
+    
+    // Initialize the entries array for this template if it doesn't exist
+    if (!this._templateEntries[templateName]) {
+      this._templateEntries[templateName] = []
+      
+      // Register the scripts with the templater
+      const scripts = [path.join(this.config.routePrefix, outputPath)]
+      templater.on('renderContext.'+templateName, () => ({
+        headScripts: [],
+        scripts,
+        imports: []
+      }))
+    }
+    
+    // Add this script to the entries for this template
+    this._templateEntries[templateName].push(script)
+    
+    // Build all entries for this template into a single bundle
+    this._buildWhenReady(() => {
+      return this.bundleMultiple(this._templateEntries[templateName], outputPath)
+    })
   }
 
   _establishRoute(route, path) {
@@ -177,8 +189,16 @@ class ClientJS extends NxusModule {
     const sourceMap = this.config.sourceMap
     const isDev = process.env.NODE_ENV !== 'production'
 
+    // Handle either a single entry or multiple entries
+    const entryConfig = Array.isArray(entry) 
+      ? entry.reduce((obj, file, index) => {
+          obj[path.basename(file, path.extname(file))] = path.resolve(file);
+          return obj;
+        }, {})
+      : path.resolve(entry);
+
     let options = {
-      entry: path.resolve(entry),
+      entry: entryConfig,
       output: {
         filename: outputFilename,
         path: outputPath
@@ -334,6 +354,72 @@ class ClientJS extends NxusModule {
   }
 
   /**
+   * Create a clientjs bundle from multiple entry points that can be injected into a rendered page.
+   * @param  {Array} entries  the source files to bundle
+   * @param  {String} output the output path to use in the browser to access the bundled source
+   */
+  bundleMultiple(entries, output) {
+    this.log.debug('Bundling multiple entries to', output)
+    
+    const outputDir = path.dirname(output)
+    
+    if(output && output[0] !== '/') output = '/'+output //add prepending slash if not set
+    const outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
+    const outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
+    const outputFile = this.config.assetFolder+output
+    const outputFilename = path.basename(outputFile)
+
+    let promise = this._outputPaths[outputFile]
+    if (!promise) {
+      promise = new Promise((resolve, reject) => {
+        // Create webpack config with multiple entry points
+        const options = this._webpackConfig(entries, outputPath, outputFilename)
+        webpack(options, (err, stats) => {
+          if (err) {
+            this.log.error(`Bundle error for multiple entries`, err)
+            reject(err)
+            return
+          }
+          const info = stats.toJson()
+          if (stats.hasErrors()) {
+            const errorDetails = info.errors.map(error => {
+              return {
+                message: error.message,
+                moduleName: error.moduleName,
+                loc: error.loc
+              }
+            });
+            this.log.error(`Bundle errors for multiple entries:`, JSON.stringify(errorDetails, null, 2));
+            try {
+              const fstat = fs.lstatSync(outputFile)
+              if (fstat.isFile()) fs.unlinkSync(outputFile)
+            } catch (e) {
+              if (e.code !== 'ENOENT') throw e
+            }
+            reject(new Error(JSON.stringify(errorDetails, null, 2)))
+            return
+          }
+          if (stats.hasWarnings()) {
+            const warningDetails = info.warnings.map(warning => {
+              return {
+                message: warning.message,
+                moduleName: warning.moduleName,
+                loc: warning.loc
+              }
+            });
+            this.log.error(`Bundle warnings for multiple entries:`, JSON.stringify(warningDetails, null, 2));
+          }
+          this.log.debug(`Bundle for multiple entries written to ${outputFile}`)
+          resolve()
+        })
+      })
+      this._establishRoute(outputRoute, outputPath)
+      this._outputPaths[outputFile] = promise
+    }
+    return promise
+  }
+
+  /**
    * Create a clientjs bundle that can be injected into a rendered page.
    * @param  {[type]} entry  the source file to bundle
    * @param  {[type]} output the output path to use in the browser to access the bundled source
@@ -342,10 +428,7 @@ class ClientJS extends NxusModule {
     this.log.debug('Bundling', entry, "to", output)
 
     const outputDir = path.dirname(output)
-    if (outputDir === '.') {
-      // outputDir = '' // This line seems unnecessary based on the original logic.
-    }
-
+    
     if(output && output[0] !== '/') output = '/'+output //add prepending slash if not set
     const outputRoute = this.config.routePrefix+path.dirname(output) //combine the routePrefix with output path
     const outputPath = path.resolve(this.config.assetFolder+path.dirname(output))
