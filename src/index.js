@@ -210,6 +210,10 @@ class ClientJS extends NxusModule {
                 presets: ['@babel/preset-env', '@babel/preset-typescript', '@babel/preset-react']
               }
             }
+          },
+          {
+            test: /\.css$/,
+            use: ['style-loader', 'css-loader']
           }
         ]
       },
