@@ -8,6 +8,7 @@
     "postversion": "npm run build-docs && git push && git push --tags",
     "test": "NODE_ENV=test mocha --require @babel/register -R spec src/test",
     "compile": "rm -rf lib/; babel src --out-dir lib --ignore \"src/test\"",
+    "prepare": "npm run compile",
     "prepublish": "npm run compile",
     "postpublish": "npm run build-docs && npm run publish-docs",
     "build-docs": "documentation readme ./src/index.js --project-name nxus-clientjs --project-version $(node -e \"console.log(require('./package.json').version)\") --readme-file ./README.md -s \"nxus-clientjs\"",
