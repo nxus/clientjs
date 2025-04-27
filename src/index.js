@@ -133,7 +133,7 @@ class ClientJS extends NxusModule {
       assetFolder: '.tmp/clientjs',
       webcomponentsURL: '/js/webcomponentsjs/webcomponents-lite.min.js',
       entries: {},
-      sourceMap: app.config.NODE_ENV !== 'production' ? 'cheap-module-eval-source-map' : false,
+      sourceMap: app.config.NODE_ENV !== 'production' ? 'source-map' : false,
       buildSeries: false,
       buildOnly: false,
       buildNone: false
@@ -202,7 +202,7 @@ class ClientJS extends NxusModule {
         path: outputPath
       },
       mode: app.config.NODE_ENV,
-      devtool: sourceMap ? sourceMap : false,
+      devtool: sourceMap ? (typeof sourceMap === 'string' ? sourceMap : 'source-map') : false,
       watch: this.config.watchify,
       resolve: {
         modules: [
