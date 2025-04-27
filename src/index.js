@@ -111,7 +111,8 @@ class ClientJS extends NxusModule {
       buildSeries: false,
       buildOnly: false,
       buildNone: false,
-      concurrentBuilds: app.config.NODE_ENV === 'production' ? 4 : 8
+      concurrentBuilds: app.config.NODE_ENV === 'production' ? 4 : 8,
+      fastDev: process.env.FAST_DEV === 'true' || false
     }
   }
 
@@ -183,7 +184,8 @@ class ClientJS extends NxusModule {
         path: outputPath
       },
       mode: app.config.NODE_ENV,
-      devtool: isDev ? 'eval-cheap-module-source-map' : (sourceMap ? (typeof sourceMap === 'string' ? sourceMap : 'source-map') : false),
+      // Use eval in dev for fastest builds
+      devtool: isDev ? 'eval' : (sourceMap ? (typeof sourceMap === 'string' ? sourceMap : 'source-map') : false),
       watch: this.config.watchify,
       resolve: {
         modules: [
@@ -196,47 +198,96 @@ class ClientJS extends NxusModule {
         ],
         extensions: ['.js', '.jsx', '.ts', '.tsx', '.json']
       },
+      stats: isDev ? 'errors-only' : 'normal', // Reduce output in development
       module: {
-        rules: [
-          {
-            test: /\.(js|jsx)$/,
-            exclude: /(node_modules|bower_components)/,
-            use: [
-              {
-                loader: 'babel-loader',
-                options: { 
-                  presets: ['@babel/preset-env', '@babel/preset-react'],
-                  cacheDirectory: true
-                }
-              }
-            ]
-          },
-          {
-            test: /\.(ts|tsx)$/,
-            exclude: /(node_modules|bower_components)/,
-            use: [
-              {
-                loader: 'babel-loader',
-                options: { 
-                  presets: ['@babel/preset-env', '@babel/preset-typescript', '@babel/preset-react'],
-                  cacheDirectory: true
-                }
-              }
-            ]
-          },
-          {
-            test: /\.css$/,
-            use: ['style-loader', 'css-loader']
-          }
-        ]
+        rules: []
       },
       optimization: {
-        minimize: this.config.minify,
+        minimize: false, // Always disable minification in development
         removeAvailableModules: false,
         removeEmptyChunks: false,
         splitChunks: false,
+        runtimeChunk: false,
       },
+      // Skip performance hints
       performance: { hints: false }
+    }
+    
+    // Add necessary loaders based on environment
+    if (isDev) {
+      // Faster development loaders with minimal processing
+      options.module.rules = [
+        {
+          test: /\.(js|jsx)$/,
+          exclude: /(node_modules|bower_components)/,
+          use: [
+            {
+              loader: 'babel-loader',
+              options: { 
+                // In dev, only transpile modern JS syntax, skip polyfills for speed
+                presets: [['@babel/preset-env', { modules: false, targets: { esmodules: true }, useBuiltIns: false }], '@babel/preset-react'],
+                cacheDirectory: true,
+                compact: false
+              }
+            }
+          ]
+        },
+        {
+          test: /\.(ts|tsx)$/,
+          exclude: /(node_modules|bower_components)/,
+          use: [
+            {
+              loader: 'babel-loader',
+              options: { 
+                presets: [['@babel/preset-env', { modules: false, targets: { esmodules: true }, useBuiltIns: false }], '@babel/preset-typescript', '@babel/preset-react'],
+                cacheDirectory: true,
+                compact: false
+              }
+            }
+          ]
+        },
+        {
+          test: /\.css$/,
+          use: ['style-loader', 'css-loader']
+        }
+      ];
+    } else {
+      // Full production loaders
+      options.module.rules = [
+        {
+          test: /\.(js|jsx)$/,
+          exclude: /(node_modules|bower_components)/,
+          use: [
+            {
+              loader: 'babel-loader',
+              options: { 
+                presets: ['@babel/preset-env', '@babel/preset-react'],
+                cacheDirectory: true
+              }
+            }
+          ]
+        },
+        {
+          test: /\.(ts|tsx)$/,
+          exclude: /(node_modules|bower_components)/,
+          use: [
+            {
+              loader: 'babel-loader',
+              options: { 
+                presets: ['@babel/preset-env', '@babel/preset-typescript', '@babel/preset-react'],
+                cacheDirectory: true
+              }
+            }
+          ]
+        },
+        {
+          test: /\.css$/,
+          use: ['style-loader', 'css-loader']
+        }
+      ];
+      
+      // Only enable minification in production
+      options.optimization.minimize = this.config.minify;
     }
 
     if (this.config.webpackConfig) {
@@ -258,7 +309,15 @@ class ClientJS extends NxusModule {
     if (isDev) {
       // Use memory cache in development for better performance
       options.cache = {
-        type: 'memory'
+        type: 'memory',
+        maxGenerations: 1 // Aggressive garbage collection
+      };
+      
+      // Additional dev optimizations
+      options.infrastructureLogging = { level: 'none' };
+      options.snapshot = {
+        managedPaths: [],
+        immutablePaths: []
       };
     } else {
       // Use filesystem cache only in production
@@ -293,6 +352,35 @@ class ClientJS extends NxusModule {
     const outputFile = this.config.assetFolder+output
     const outputFilename = path.basename(outputFile)
 
+    // Fast dev mode - creates a simple shim file for development to skip full webpack processing
+    if (process.env.NODE_ENV !== 'production' && this.config.fastDev) {
+      // Check if file already exists
+      try {
+        fs.statSync(outputFile);
+        // If file exists, no need to rebuild in fast dev mode
+        return Promise.resolve();
+      } catch (e) {
+        // File doesn't exist, create a minimal shim
+        this._establishRoute(outputRoute, outputPath);
+        
+        // Create a minimal JS file for dev mode
+        try {
+          fs.ensureDirSync(outputPath);
+          const entryPath = path.resolve(entry);
+          const shimContent = `console.log("[FastDev] Module '${entryPath}' loaded as shim");
+// This is a development shim created in fast-dev mode
+// Set FAST_DEV=false to use full webpack bundling`;
+          fs.writeFileSync(outputFile, shimContent);
+          this.log.debug(`[FastDev] Created shim for ${entry} at ${outputFile}`);
+          return Promise.resolve();
+        } catch (err) {
+          this.log.error(`[FastDev] Error creating shim for ${entry}`, err);
+          return Promise.reject(err);
+        }
+      }
+    }
+
+    // Normal webpack bundling
     let promise = this._outputPaths[outputFile]
     if (!promise) {
       promise = new Promise((resolve, reject) => {
@@ -338,7 +426,6 @@ class ClientJS extends NxusModule {
       })
       this._establishRoute(outputRoute, outputPath)
       this._outputPaths[outputFile] = promise
-
     }
     return promise
   }
