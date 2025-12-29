@@ -4,6 +4,7 @@ import Promise from 'bluebird'
 import webpack from 'webpack'
 import path from 'path'
 import fs from 'fs-extra'
+import crypto from 'crypto'
 import _ from 'underscore'
 import traverse from 'traverse'
 
@@ -86,6 +87,7 @@ class ClientJS extends NxusModule {
     this._templateEntries = {} // Track scripts per template
 
     this._builders = []
+    this._bundleWatchers = {} // outputFile -> {watchers: fs.FSWatcher[], rebuilding: boolean}
     const readyToBuild = new Promise((resolve, reject) => {
       app.on('launch', () => {
         resolve()
@@ -113,7 +115,217 @@ class ClientJS extends NxusModule {
       buildOnly: false,
       buildNone: false,
       concurrentBuilds: app.config.NODE_ENV === 'production' ? 4 : 8,
-      fastDev: process.env.FAST_DEV === 'true' || false
+      fastDev: process.env.FAST_DEV === 'true' || false,
+      // In dev, skip the initial webpack run on restart if the previous output bundle is still valid.
+      // Disabled in test to avoid cross-run flakiness from any leftover cache files.
+      skipUnchanged: process.env.NODE_ENV !== 'production' && process.env.NODE_ENV !== 'test'
+    }
+  }
+
+  _isDev() {
+    return process.env.NODE_ENV !== 'production'
+  }
+
+  _cacheDir() {
+    // Keep cache alongside compiled assets so it's naturally scoped per app/project.
+    return path.resolve(this.config.assetFolder, '.clientjs-cache')
+  }
+
+  _cachePathFor(outputFile) {
+    const key = crypto.createHash('sha1').update(String(outputFile)).digest('hex')
+    return path.join(this._cacheDir(), `${key}.json`)
+  }
+
+  async _hashFile(filePath) {
+    return await new Promise((resolve, reject) => {
+      const hash = crypto.createHash('sha1')
+      const stream = fs.createReadStream(filePath)
+      stream.on('error', reject)
+      stream.on('data', (d) => hash.update(d))
+      stream.on('end', () => resolve(hash.digest('hex')))
+    })
+  }
+
+  _bundleSignature(entries, outputFile) {
+    // Only include settings that affect output correctness.
+    const sig = {
+      v: 1,
+      nodeEnv: process.env.NODE_ENV || '',
+      entries: Array.isArray(entries) ? entries.map(String) : [String(entries)],
+      outputFile: String(outputFile),
+      // webpack/babel related switches
+      minify: !!this.config.minify,
+      sourceMap: this.config.sourceMap,
+      appendRulesConfig: !!this.config.appendRulesConfig,
+      webpackConfig: this.config.webpackConfig || {},
+    }
+    return crypto.createHash('sha1').update(JSON.stringify(sig)).digest('hex')
+  }
+
+  async _readBundleCache(outputFile) {
+    const cachePath = this._cachePathFor(outputFile)
+    try {
+      const txt = await fs.readFile(cachePath, 'utf8')
+      return JSON.parse(txt)
+    } catch (e) {
+      return null
+    }
+  }
+
+  async _writeBundleCache(outputFile, data) {
+    const cacheDir = this._cacheDir()
+    const cachePath = this._cachePathFor(outputFile)
+    await fs.ensureDir(cacheDir)
+    await fs.writeFile(cachePath, JSON.stringify(data, null, 2), 'utf8')
+  }
+
+  _normalizeDeps(rootDir, deps) {
+    const out = []
+    const seen = new Set()
+    for (const dep of deps) {
+      if (!dep) continue
+      const p = String(dep)
+      // Skip node_modules / bower_components to keep dep set small and stable.
+      if (p.includes(`${path.sep}node_modules${path.sep}`) || p.includes(`${path.sep}bower_components${path.sep}`)) continue
+      // Prefer project-local deps for stable cache behavior.
+      if (rootDir && !p.startsWith(rootDir)) continue
+      if (seen.has(p)) continue
+      seen.add(p)
+      out.push(p)
+    }
+    out.sort()
+    return out
+  }
+
+  async _canSkipBundle(entries, outputFile) {
+    if (!this._isDev()) return false
+    if (!this.config.skipUnchanged) return false
+    // If we're going to run webpack in watch mode anyway, we can still skip the *initial* run,
+    // but only if we can set up a lightweight file watcher to trigger the first rebuild.
+    // (Otherwise we'd serve stale assets with no rebuild path.)
+
+    try {
+      const st = await fs.stat(outputFile)
+      if (!st.isFile()) return false
+    } catch (e) {
+      return false
+    }
+
+    const cached = await this._readBundleCache(outputFile)
+    if (!cached) return false
+
+    const expectedSig = this._bundleSignature(entries, outputFile)
+    if (cached.signature !== expectedSig) return false
+
+    const deps = Array.isArray(cached.deps) ? cached.deps : []
+    if (!deps.length) return false
+
+    // Fast-path: if mtime+size match, assume unchanged; otherwise fall back to content hash compare.
+    for (const dep of deps) {
+      const meta = cached.files && cached.files[dep]
+      if (!meta) return false
+      let st
+      try {
+        st = await fs.stat(dep)
+        if (!st.isFile()) return false
+      } catch (e) {
+        return false
+      }
+      if (st.size === meta.size && st.mtimeMs === meta.mtimeMs) continue
+      // Content changed (or timestamp changed); confirm via hash to avoid false rebuilds.
+      const h = await this._hashFile(dep)
+      if (h !== meta.hash) return false
+    }
+
+    return true
+  }
+
+  _closeBundleWatchers(outputFile) {
+    const w = this._bundleWatchers[outputFile]
+    if (!w) return
+    for (const watcher of (w.watchers || [])) {
+      try { watcher.close() } catch (e) {}
+    }
+    delete this._bundleWatchers[outputFile]
+  }
+
+  async _startBundleWatchers(entries, output, outputFile) {
+    if (!this.config.watchify) return
+    if (this._bundleWatchers[outputFile]) return
+
+    const cached = await this._readBundleCache(outputFile)
+    if (!cached || !Array.isArray(cached.deps) || !cached.deps.length) return
+
+    const watchers = []
+    const state = {watchers, rebuilding: false}
+    this._bundleWatchers[outputFile] = state
+
+    const triggerRebuild = () => {
+      if (state.rebuilding) return
+      state.rebuilding = true
+      this.log.debug(`[clientjs] Change detected; rebuilding ${outputFile}`)
+      this._closeBundleWatchers(outputFile)
+      // Force rebuild: clear promise cache and run normal bundle path.
+      delete this._outputPaths[outputFile]
+      // Re-enter via bundle / bundleMultiple to preserve existing behavior (routes, errors, etc).
+      if (Array.isArray(entries)) {
+        this.bundleMultiple(entries, output).catch((e) => this.log.error(`[clientjs] Rebuild failed for ${outputFile}`, e))
+      } else {
+        this.bundle(entries, output).catch((e) => this.log.error(`[clientjs] Rebuild failed for ${outputFile}`, e))
+      }
+    }
+
+    // Watch individual dep files. This is intentionally lightweight and only used when we skipped webpack.
+    for (const dep of cached.deps) {
+      try {
+        const w = fs.watch(dep, {persistent: false}, triggerRebuild)
+        watchers.push(w)
+      } catch (e) {
+        // If any watcher fails (e.g. too many files), bail out and fall back to normal webpack path next time.
+        this.log.debug(`[clientjs] Unable to watch ${dep}; falling back to webpack on next run`)
+        this._closeBundleWatchers(outputFile)
+        return
+      }
+    }
+  }
+
+  async _persistBundleCache(entries, outputFile, stats) {
+    try {
+      const compilation = stats && stats.compilation
+      const rootDir = process.cwd()
+      const depsRaw = compilation && compilation.fileDependencies ? Array.from(compilation.fileDependencies) : []
+      const deps = this._normalizeDeps(rootDir, depsRaw)
+      if (!deps.length) return
+
+      const prev = await this._readBundleCache(outputFile)
+      const prevFiles = (prev && prev.files) ? prev.files : {}
+
+      const files = {}
+      // Record per-file metadata; reuse prior hashes when size+mtimeMs match to keep watch rebuilds fast.
+      for (const dep of deps) {
+        try {
+          const st = await fs.stat(dep)
+          if (!st.isFile()) continue
+          const prevMeta = prevFiles[dep]
+          const sameMeta = prevMeta && prevMeta.size === st.size && prevMeta.mtimeMs === st.mtimeMs && prevMeta.hash
+          files[dep] = {
+            size: st.size,
+            mtimeMs: st.mtimeMs,
+            hash: sameMeta ? prevMeta.hash : await this._hashFile(dep)
+          }
+        } catch (e) {
+          // ignore missing deps
+        }
+      }
+
+      await this._writeBundleCache(outputFile, {
+        signature: this._bundleSignature(entries, outputFile),
+        deps,
+        files
+      })
+    } catch (e) {
+      // Cache failures should never fail the build.
+      this.log.debug('[clientjs] Failed writing bundle cache', e)
     }
   }
 
@@ -375,48 +587,64 @@ class ClientJS extends NxusModule {
     const outputFile = this.config.assetFolder+output
     const outputFilename = path.basename(outputFile)
 
+    // Skip initial build on restart when unchanged; optionally attach lightweight watchers to trigger a rebuild on edits.
+    // This is a dev-only optimization.
+    // Note: we still establish the static route so existing outputFile can be served.
+    // (If any dep changes, watchers will trigger a normal webpack rebuild.)
+    const maybeSkip = () => this._canSkipBundle(entries, outputFile).then(async (skip) => {
+      if (!skip) return false
+      this._establishRoute(outputRoute, outputPath)
+      await this._startBundleWatchers(entries, output, outputFile)
+      this.log.debug(`[clientjs] Using cached bundle for ${outputFile} (skipped webpack)`)
+      return true
+    })
+
     let promise = this._outputPaths[outputFile]
     if (!promise) {
-      promise = new Promise((resolve, reject) => {
-        // Create webpack config with multiple entry points
-        const options = this._webpackConfig(entries, outputPath, outputFilename)
-        webpack(options, (err, stats) => {
-          if (err) {
-            this.log.error(`Bundle error for multiple entries`, err)
-            reject(err)
-            return
-          }
-          const info = stats.toJson()
-          if (stats.hasErrors()) {
-            const errorDetails = info.errors.map(error => {
-              return {
-                message: error.message,
-                moduleName: error.moduleName,
-                loc: error.loc
-              }
-            });
-            this.log.error(`Bundle errors for multiple entries:`, JSON.stringify(errorDetails, null, 2));
-            try {
-              const fstat = fs.lstatSync(outputFile)
-              if (fstat.isFile()) fs.unlinkSync(outputFile)
-            } catch (e) {
-              if (e.code !== 'ENOENT') throw e
+      promise = Promise.resolve(maybeSkip()).then((skipped) => {
+        if (skipped) return
+        return new Promise((resolve, reject) => {
+          // Create webpack config with multiple entry points
+          const options = this._webpackConfig(entries, outputPath, outputFilename)
+          webpack(options, async (err, stats) => {
+            if (err) {
+              this.log.error(`Bundle error for multiple entries`, err)
+              reject(err)
+              return
             }
-            reject(new Error(JSON.stringify(errorDetails, null, 2)))
-            return
-          }
-          if (stats.hasWarnings()) {
-            const warningDetails = info.warnings.map(warning => {
-              return {
-                message: warning.message,
-                moduleName: warning.moduleName,
-                loc: warning.loc
+            const info = stats.toJson()
+            if (stats.hasErrors()) {
+              const errorDetails = info.errors.map(error => {
+                return {
+                  message: error.message,
+                  moduleName: error.moduleName,
+                  loc: error.loc
+                }
+              });
+              this.log.error(`Bundle errors for multiple entries:`, JSON.stringify(errorDetails, null, 2));
+              try {
+                const fstat = fs.lstatSync(outputFile)
+                if (fstat.isFile()) fs.unlinkSync(outputFile)
+              } catch (e) {
+                if (e.code !== 'ENOENT') throw e
               }
-            });
-            this.log.error(`Bundle warnings for multiple entries:`, JSON.stringify(warningDetails, null, 2));
-          }
-          this.log.debug(`Bundle for multiple entries written to ${outputFile}`)
-          resolve()
+              reject(new Error(JSON.stringify(errorDetails, null, 2)))
+              return
+            }
+            if (stats.hasWarnings()) {
+              const warningDetails = info.warnings.map(warning => {
+                return {
+                  message: warning.message,
+                  moduleName: warning.moduleName,
+                  loc: warning.loc
+                }
+              });
+              this.log.error(`Bundle warnings for multiple entries:`, JSON.stringify(warningDetails, null, 2));
+            }
+            await this._persistBundleCache(entries, outputFile, stats)
+            this.log.debug(`Bundle for multiple entries written to ${outputFile}`)
+            resolve()
+          })
         })
       })
       this._establishRoute(outputRoute, outputPath)
@@ -472,45 +700,57 @@ class ClientJS extends NxusModule {
     // Normal webpack bundling
     let promise = this._outputPaths[outputFile]
     if (!promise) {
-      promise = new Promise((resolve, reject) => {
-        const options = this._webpackConfig(entry, outputPath, outputFilename)
-        webpack(options, (err, stats) => {
-          if (err) {
-            this.log.error(`Bundle error for ${entry}`, err)
-            reject(err)
-            return
-          }
-          const info = stats.toJson()
-          if (stats.hasErrors()) {
-            const errorDetails = info.errors.map(error => {
-              return {
-                message: error.message,
-                moduleName: error.moduleName,
-                loc: error.loc
-              }
-            });
-            this.log.error(`Bundle errors for ${entry}:`, JSON.stringify(errorDetails, null, 2));
-            try {
-              const fstat = fs.lstatSync(outputFile)
-              if (fstat.isFile()) fs.unlinkSync(outputFile)
-            } catch (e) {
-              if (e.code !== 'ENOENT') throw e
+      const maybeSkip = () => this._canSkipBundle(entry, outputFile).then(async (skip) => {
+        if (!skip) return false
+        this._establishRoute(outputRoute, outputPath)
+        await this._startBundleWatchers(entry, output, outputFile)
+        this.log.debug(`[clientjs] Using cached bundle for ${outputFile} (skipped webpack)`)
+        return true
+      })
+
+      promise = Promise.resolve(maybeSkip()).then((skipped) => {
+        if (skipped) return
+        return new Promise((resolve, reject) => {
+          const options = this._webpackConfig(entry, outputPath, outputFilename)
+          webpack(options, async (err, stats) => {
+            if (err) {
+              this.log.error(`Bundle error for ${entry}`, err)
+              reject(err)
+              return
             }
-            reject(new Error(JSON.stringify(errorDetails, null, 2)))
-            return
-          }
-          if (stats.hasWarnings()) {
-            const warningDetails = info.warnings.map(warning => {
-              return {
-                message: warning.message,
-                moduleName: warning.moduleName,
-                loc: warning.loc
+            const info = stats.toJson()
+            if (stats.hasErrors()) {
+              const errorDetails = info.errors.map(error => {
+                return {
+                  message: error.message,
+                  moduleName: error.moduleName,
+                  loc: error.loc
+                }
+              });
+              this.log.error(`Bundle errors for ${entry}:`, JSON.stringify(errorDetails, null, 2));
+              try {
+                const fstat = fs.lstatSync(outputFile)
+                if (fstat.isFile()) fs.unlinkSync(outputFile)
+              } catch (e) {
+                if (e.code !== 'ENOENT') throw e
               }
-            });
-            this.log.error(`Bundle warnings for ${entry}:`, JSON.stringify(warningDetails, null, 2));
-          }
-          this.log.debug(`Bundle for ${entry} written to ${outputFile}`)
-          resolve()
+              reject(new Error(JSON.stringify(errorDetails, null, 2)))
+              return
+            }
+            if (stats.hasWarnings()) {
+              const warningDetails = info.warnings.map(warning => {
+                return {
+                  message: warning.message,
+                  moduleName: warning.moduleName,
+                  loc: warning.loc
+                }
+              });
+              this.log.error(`Bundle warnings for ${entry}:`, JSON.stringify(warningDetails, null, 2));
+            }
+            await this._persistBundleCache(entry, outputFile, stats)
+            this.log.debug(`Bundle for ${entry} written to ${outputFile}`)
+            resolve()
+          })
         })
       })
       this._establishRoute(outputRoute, outputPath)
