@@ -33,7 +33,7 @@
     "@babel/core": "^7.0.0",
     "babel-loader": "^8.0.0",
     "bluebird": "^3.0.6",
-    "css-loader": "^3.6.0",
+    "css-loader": "^7.1.2",
     "fs-extra": "^8.1.0",
     "imports-loader": "^0.8.0",
     "mkdirp": "^3.0.1",
